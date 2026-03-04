@@ -75,7 +75,7 @@ backend/src/
 Common request fields across endpoints:
 
 - `engine`: `"auto"` | `"http"` | `"browser"` (default: `"auto"`)
-- `formats`: `["markdown", "html", "links", "metadata"]`
+- `formats`: `["markdown", "html", "rawHtml", "links", "images", "screenshot"]`
 - `timeout_ms`: request timeout in milliseconds
 - `headers`: custom HTTP headers
 

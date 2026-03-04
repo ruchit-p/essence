@@ -3,8 +3,7 @@
 **/*.rs.bk
 *.pdb
 
-# Cargo lock (keep for applications, ignore for libraries)
-# Cargo.lock
+# Cargo.lock is committed (application binary — reproducible builds)
 
 # Environment files
 .env

@@ -16,7 +16,7 @@ pub struct SearchProvider {
 impl SearchProvider {
     pub fn new() -> Result<Self> {
         let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://github.com/essence)")
+            .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://essence.foundation)")
             .build()
             .map_err(|e| ScrapeError::Internal(format!("Failed to build HTTP client: {}", e)))?;
 
@@ -69,9 +69,9 @@ impl SearchProvider {
         let document = Html::parse_document(&html_content);
 
         // DuckDuckGo HTML selectors
-        let result_selector = Selector::parse(".result").unwrap();
-        let title_selector = Selector::parse(".result__a").unwrap();
-        let snippet_selector = Selector::parse(".result__snippet").unwrap();
+        let result_selector = Selector::parse(".result").expect("valid CSS selector");
+        let title_selector = Selector::parse(".result__a").expect("valid CSS selector");
+        let snippet_selector = Selector::parse(".result__snippet").expect("valid CSS selector");
 
         let mut results = Vec::new();
 

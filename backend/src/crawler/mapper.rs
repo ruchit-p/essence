@@ -14,7 +14,7 @@ pub async fn discover_urls(url: &str, options: &MapRequest) -> Result<Vec<String
         Url::parse(url).map_err(|e| ScrapeError::InvalidUrl(format!("Invalid URL: {}", e)))?;
 
     let client = Client::builder()
-        .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://github.com/essence)")
+        .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://essence.foundation)")
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| ScrapeError::Internal(format!("Failed to build HTTP client: {}", e)))?;

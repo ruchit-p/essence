@@ -9,7 +9,7 @@
 
 use crate::error::{Result, ScrapeError};
 use moka::future::Cache;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use reqwest::Client;
 use robotstxt::DefaultMatcher;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ pub struct RobotsData {
 /// Global robots.txt cache
 /// Key: domain (e.g., "example.com")
 /// Value: RobotsData
-static ROBOTS_CACHE: Lazy<Arc<Cache<String, RobotsData>>> = Lazy::new(|| {
+static ROBOTS_CACHE: LazyLock<Arc<Cache<String, RobotsData>>> = LazyLock::new(|| {
     Arc::new(
         Cache::builder()
             .max_capacity(10_000)

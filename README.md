@@ -1,8 +1,16 @@
 # Essence
 
+[Website](https://essence.foundation) | [Docs](https://essence.foundation/docs) | [crates.io](https://crates.io/crates/essence-engine) | [GitHub](https://github.com/ruchit-p/essence)
+
 A fast, open-source web retrieval engine built in Rust. Fetches pages via lightweight HTTP with automatic fallback to headless Chromium for JavaScript-heavy sites. Returns clean, LLM-ready Markdown.
 
-**91% quality win rate** against Firecrawl across 35 real-world URLs, judged by LLM evaluation. **69% faster** on average.
+**91% quality win rate** against Firecrawl across 35 real-world URLs, judged by LLM evaluation. **1.5x faster** on average.
+
+## Install
+
+```bash
+cargo install essence-engine
+```
 
 ## Why Essence?
 
@@ -64,12 +72,12 @@ curl -s -X POST http://localhost:8080/api/v1/map \
 # Crawl a site (follow links, respect robots.txt)
 curl -s -X POST http://localhost:8080/api/v1/crawl \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com", "max_depth": 2, "limit": 10}' | jq .
+  -d '{"url": "https://example.com", "maxDepth": 2, "limit": 10}' | jq .
 
 # Search the web
 curl -s -X POST http://localhost:8080/api/v1/search \
   -H "Content-Type: application/json" \
-  -d '{"query": "rust web scraping", "num_results": 5}' | jq .
+  -d '{"query": "rust web scraping", "limit": 5}' | jq .
 ```
 
 ---
@@ -91,7 +99,7 @@ Single-page capture with automatic engine selection.
 | `engine` | string | `"auto"` | Rendering engine: `"auto"`, `"http"`, or `"browser"` |
 | `timeout` | int | `30000` | Timeout in milliseconds |
 | `headers` | object | none | Custom HTTP headers |
-| `only_main_content` | bool | `false` | Extract only the main content area |
+| `onlyMainContent` | bool | `true` | Extract only the main content area |
 
 **Response:**
 
@@ -105,9 +113,9 @@ Single-page capture with automatic engine selection.
       "description": "Page description",
       "language": "en",
       "url": "https://example.com",
-      "status_code": 200,
-      "word_count": 1234,
-      "reading_time": 5
+      "statusCode": 200,
+      "wordCount": 1234,
+      "readingTime": 5
     },
     "links": ["https://example.com/about", "https://example.com/contact"],
     "images": ["https://example.com/hero.jpg"]
@@ -124,13 +132,13 @@ Multi-page traversal with dedup, robots.txt compliance, and rate limiting.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `url` | string | *required* | Starting URL |
-| `max_depth` | int | `3` | Maximum link depth to follow |
+| `maxDepth` | int | `2` | Maximum link depth to follow |
 | `limit` | int | `100` | Maximum pages to crawl |
-| `include_paths` | string[] | none | Glob patterns to include (e.g. `["/blog/*"]`) |
-| `exclude_paths` | string[] | none | Glob patterns to exclude (e.g. `["/admin/*"]`) |
-| `allow_backward_links` | bool | `false` | Follow links up the URL hierarchy |
-| `allow_external_links` | bool | `false` | Follow links to other domains |
-| `detect_pagination` | bool | `true` | Automatically follow paginated content |
+| `includePaths` | string[] | none | Glob patterns to include (e.g. `["/blog/*"]`) |
+| `excludePaths` | string[] | none | Glob patterns to exclude (e.g. `["/admin/*"]`) |
+| `allowBackwardLinks` | bool | `false` | Follow links up the URL hierarchy |
+| `allowExternalLinks` | bool | `false` | Follow links to other domains |
+| `detectPagination` | bool | `true` | Automatically follow paginated content |
 
 **Response:**
 
@@ -140,11 +148,11 @@ Multi-page traversal with dedup, robots.txt compliance, and rate limiting.
   "data": [
     {
       "markdown": "# Home\n\nWelcome...",
-      "metadata": { "title": "Home", "url": "https://example.com", "status_code": 200 }
+      "metadata": { "title": "Home", "url": "https://example.com", "statusCode": 200 }
     },
     {
       "markdown": "# About\n\nAbout us...",
-      "metadata": { "title": "About", "url": "https://example.com/about", "status_code": 200 }
+      "metadata": { "title": "About", "url": "https://example.com/about", "statusCode": 200 }
     }
   ]
 }
@@ -159,10 +167,10 @@ URL discovery via sitemaps and in-page link extraction.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `url` | string | *required* | Site URL to discover links from |
-| `include_subdomains` | bool | `false` | Include URLs from subdomains |
+| `includeSubdomains` | bool | `true` | Include URLs from subdomains |
 | `limit` | int | `5000` | Maximum URLs to return |
 | `search` | string | none | Filter URLs by search query |
-| `ignore_sitemap` | bool | `false` | Skip sitemap.xml discovery |
+| `ignoreSitemap` | bool | `false` | Skip sitemap.xml discovery |
 
 **Response:**
 
@@ -187,8 +195,8 @@ Web search via DuckDuckGo with optional scraping of result pages.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `query` | string | *required* | Search query |
-| `num_results` | int | `10` | Number of search results |
-| `scrape_top` | int | `0` | Scrape full content of top N results |
+| `limit` | int | `10` | Number of search results |
+| `scrapeResults` | bool | `false` | Scrape full content of each result |
 
 **Response:**
 
@@ -204,6 +212,14 @@ Web search via DuckDuckGo with optional scraping of result pages.
   ]
 }
 ```
+
+### POST /api/v1/crawl/stream
+
+Streaming variant of the crawl endpoint. Returns results via Server-Sent Events (SSE) as pages are crawled, rather than waiting for the full crawl to complete. Accepts the same parameters as `/api/v1/crawl`.
+
+### GET /health
+
+Health check endpoint. Returns `200 OK` when the server is running. Used by Docker's `HEALTHCHECK`.
 
 ---
 
@@ -221,6 +237,8 @@ The MCP endpoint is available at `http://localhost:8080/mcp` using the Streamabl
 | `crawl` | Crawl a website up to a given depth and page limit. Params: `url` (required), `max_depth`, `limit`, `include_paths`, `exclude_paths` |
 | `map` | Discover URLs on a site via sitemaps and link extraction. Params: `url` (required), `search`, `limit`, `include_subdomains` |
 | `search` | Search the web and optionally scrape results. Params: `query` (required), `limit`, `scrape_results` |
+
+> **Note:** The MCP server uses `timeout_ms` while the REST API uses `timeout`. Both accept milliseconds.
 
 ### Setup with Claude Code
 
@@ -319,6 +337,10 @@ Copy `backend/.env.example` to `backend/.env` and customize:
 | `MAX_CONCURRENT_REQUESTS` | `10` | Max concurrent crawl requests |
 | `MAX_PARALLEL_SCRAPES` | `5` | Parallel scrapes for search results |
 | `MAX_REQUEST_SIZE_MB` | `1` | Maximum request body size |
+| `CRAWL_MAX_DURATION_SEC` | `300` | Maximum crawl duration in seconds |
+| `RETRY_MAX_ATTEMPTS` | `3` | Max retry attempts for failed requests |
+| `RETRY_INITIAL_DELAY_MS` | `500` | Initial retry delay |
+| `RETRY_MAX_DELAY_MS` | `30000` | Maximum retry delay |
 
 ---
 
@@ -352,7 +374,7 @@ Essence is benchmarked head-to-head against [Firecrawl](https://firecrawl.dev) a
 | Metric | Essence | Target | Status |
 |---|---|---|---|
 | **Quality Win Rate** (LLM Judge) | **91.2%** (31-2-1) | >= 70% | Exceeded |
-| **Speed Win Rate** | **68.6%** (24-7-5) | >= 50% | Exceeded |
+| **Speed Win Rate** | **74%** (26-9-0) | >= 50% | Exceeded |
 | Success Rate | 100% | 100% | Met |
 
 ### Per-Category Quality (LLM Judge)
@@ -367,7 +389,7 @@ Essence is benchmarked head-to-head against [Firecrawl](https://firecrawl.dev) a
 | Docs (Rust, Python, Go, MDN) | 3/5 | **60%** |
 | E-Commerce (Newegg, eBay, IKEA) | 3/5 | **60%** |
 
-See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for full methodology and results.
+See the [full benchmark methodology](https://github.com/ruchit-p/essence/blob/master/docs/BENCHMARKS.md) for detailed results.
 
 ---
 
@@ -375,7 +397,7 @@ See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for full methodology and results.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and PR process.
 
-This repository includes a `CLAUDE.md` for AI-assisted development, plus Claude Code skills (`.claude/skills/`) for common workflows like setup, testing, and code exploration.
+This repository includes a `CLAUDE.md` for AI-assisted development.
 
 ## License
 

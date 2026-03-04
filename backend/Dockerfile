@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.82 as builder
+FROM rust:1.85 as builder
 
 WORKDIR /app
 
@@ -8,7 +8,6 @@ COPY Cargo.toml Cargo.lock ./
 
 # Copy source code
 COPY src ./src
-COPY tests ./tests
 
 # Build for release
 RUN cargo build --release
@@ -27,9 +26,6 @@ WORKDIR /app
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/essence /usr/local/bin/essence
-
-# Create bench directory for results
-RUN mkdir -p /app/bench
 
 # Expose port
 EXPOSE 8080

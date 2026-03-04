@@ -1,5 +1,5 @@
 use crate::error::ScrapeError;
-use crate::types::{CrawlRequest, ExtractRequest, MapRequest, ScrapeRequest, SearchRequest};
+use crate::types::{CrawlRequest, MapRequest, ScrapeRequest, SearchRequest};
 use crate::utils::ssrf_protection;
 use scraper::Selector;
 use std::time::Duration;
@@ -13,11 +13,9 @@ const MAX_ACTIONS_COUNT: usize = 20;
 const MAX_CSS_SELECTOR_LENGTH: usize = 1000;
 const MAX_TIMEOUT_MS: u64 = 300_000; // 5 minutes
 const MAX_CRAWL_TIMEOUT_MS: u64 = 300_000; // 5 minutes for crawls
-const MAX_EXTRACT_TIMEOUT_MS: u64 = 600_000; // 10 minutes for extract
 const MAX_CRAWL_LIMIT: u32 = 10_000;
 const MAX_MAP_LIMIT: u32 = 100_000;
 const MAX_SEARCH_LIMIT: u32 = 100;
-const MAX_EXTRACT_URLS: usize = 50;
 
 /// Validate a URL (including SSRF protection)
 pub async fn validate_url(url: &str) -> Result<(), ScrapeError> {
@@ -199,43 +197,9 @@ pub fn validate_search_request(req: &SearchRequest) -> Result<(), ScrapeError> {
     Ok(())
 }
 
-/// Validate extract request
-pub async fn validate_extract_request(req: &ExtractRequest) -> Result<(), ScrapeError> {
-    if req.urls.is_empty() {
-        return Err(ScrapeError::InvalidRequest(
-            "Extract URLs cannot be empty".to_string(),
-        ));
-    }
-
-    if req.urls.len() > MAX_EXTRACT_URLS {
-        return Err(ScrapeError::InvalidRequest(format!(
-            "Too many URLs for extraction: {} > {}",
-            req.urls.len(),
-            MAX_EXTRACT_URLS
-        )));
-    }
-
-    for url in &req.urls {
-        validate_url(url).await?;
-    }
-
-    if req.prompt.is_empty() {
-        return Err(ScrapeError::InvalidRequest(
-            "Extract prompt cannot be empty".to_string(),
-        ));
-    }
-
-    Ok(())
-}
-
 /// Get timeout duration for crawl operations
 pub fn get_crawl_timeout() -> Duration {
     Duration::from_millis(MAX_CRAWL_TIMEOUT_MS)
-}
-
-/// Get timeout duration for extract operations
-pub fn get_extract_timeout() -> Duration {
-    Duration::from_millis(MAX_EXTRACT_TIMEOUT_MS)
 }
 
 #[cfg(test)]

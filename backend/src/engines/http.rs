@@ -23,7 +23,7 @@ pub struct HttpEngine {
 impl HttpEngine {
     pub fn new() -> Result<Self> {
         let client = Client::builder()
-            .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://github.com/essence)")
+            .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://essence.foundation)")
             .gzip(true)
             .brotli(true)
             .redirect(Policy::limited(10))
@@ -42,7 +42,7 @@ impl HttpEngine {
 
     pub fn with_timeout(timeout_ms: u64) -> Result<Self> {
         let client = Client::builder()
-            .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://github.com/essence)")
+            .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://essence.foundation)")
             .gzip(true)
             .brotli(true)
             .redirect(Policy::limited(10))
@@ -61,7 +61,7 @@ impl HttpEngine {
 
     pub fn with_options(timeout_ms: u64, skip_tls_verification: bool) -> Result<Self> {
         let mut builder = Client::builder()
-            .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://github.com/essence)")
+            .user_agent("Mozilla/5.0 (compatible; Essence/0.1.0; +https://essence.foundation)")
             .gzip(true)
             .brotli(true)
             .redirect(Policy::limited(10))
