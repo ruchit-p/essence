@@ -1,0 +1,92 @@
+{
+  "scenarios": [
+    {
+      "name": "success_immediately",
+      "description": "Request succeeds on first attempt",
+      "responses": [
+        {
+          "status": 200,
+          "body": "<html><body>Success</body></html>",
+          "delay_ms": 0
+        }
+      ]
+    },
+    {
+      "name": "retry_500_then_success",
+      "description": "First two attempts return 500, third succeeds",
+      "responses": [
+        {
+          "status": 500,
+          "body": "Internal Server Error",
+          "delay_ms": 0
+        },
+        {
+          "status": 500,
+          "body": "Internal Server Error",
+          "delay_ms": 0
+        },
+        {
+          "status": 200,
+          "body": "<html><body>Success after retries</body></html>",
+          "delay_ms": 0
+        }
+      ]
+    },
+    {
+      "name": "retry_timeout_then_success",
+      "description": "First attempt times out, second succeeds",
+      "responses": [
+        {
+          "status": 200,
+          "body": "<html><body>Should timeout</body></html>",
+          "delay_ms": 5000
+        },
+        {
+          "status": 200,
+          "body": "<html><body>Success without timeout</body></html>",
+          "delay_ms": 0
+        }
+      ]
+    },
+    {
+      "name": "max_retries_exceeded",
+      "description": "All attempts fail with 503",
+      "responses": [
+        {
+          "status": 503,
+          "body": "Service Unavailable",
+          "delay_ms": 0
+        },
+        {
+          "status": 503,
+          "body": "Service Unavailable",
+          "delay_ms": 0
+        },
+        {
+          "status": 503,
+          "body": "Service Unavailable",
+          "delay_ms": 0
+        }
+      ]
+    },
+    {
+      "name": "rate_limit_then_success",
+      "description": "First attempt is rate limited, second succeeds",
+      "responses": [
+        {
+          "status": 429,
+          "body": "Too Many Requests",
+          "delay_ms": 0,
+          "headers": {
+            "Retry-After": "1"
+          }
+        },
+        {
+          "status": 200,
+          "body": "<html><body>Success after rate limit</body></html>",
+          "delay_ms": 0
+        }
+      ]
+    }
+  ]
+}
