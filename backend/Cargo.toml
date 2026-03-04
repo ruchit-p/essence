@@ -1,6 +1,6 @@
 [package]
 name = "essence-engine"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.87"
 description = "A fast web retrieval engine with HTTP-to-browser fallback, producing LLM-ready Markdown"
