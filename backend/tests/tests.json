@@ -1,0 +1,696 @@
+{
+  "version": "2.0.0",
+  "test_suites": [
+    {
+      "name": "scrape_api_tests",
+      "path": "tests/api/scrape_test.rs",
+      "description": "Integration tests for /api/v1/scrape endpoint",
+      "test_count": 38,
+      "coverage_areas": [
+        "Basic HTML scraping",
+        "Markdown conversion quality",
+        "Metadata extraction (title, description, Open Graph tags)",
+        "Link extraction",
+        "Image extraction",
+        "Error handling (invalid URL, 404, timeout, malformed JSON)",
+        "Robots.txt compliance",
+        "Multiple output formats",
+        "Advanced options (onlyMainContent, includeTags, excludeTags)",
+        "Custom headers",
+        "Real URL testing (example.com, GitHub, Python docs)"
+      ],
+      "dependencies": [
+        "mockito",
+        "wiremock",
+        "axum",
+        "tower",
+        "serde_json",
+        "tokio"
+      ],
+      "status": "failing",
+      "tdd_approach": true,
+      "notes": "Tests are designed to FAIL initially following TDD methodology. They will pass once rust-scraper implements the /api/v1/scrape endpoint."
+    },
+    {
+      "name": "integration_auth_flow",
+      "path": "tests/integration/auth_flow.rs",
+      "description": "Integration tests for authentication flows (Auth0 JWT, API keys, rate limiting)",
+      "test_count": 15,
+      "coverage_areas": [
+        "Auth0 JWT validation with valid tokens",
+        "API key validation (valid, expired, revoked, non-existent)",
+        "Missing/invalid authentication headers",
+        "Rate limiting enforcement per tier",
+        "Concurrent API key validations",
+        "API key caching behavior (Redis)",
+        "Custom scopes validation",
+        "Last used tracking",
+        "Token format validation",
+        "Expired token handling"
+      ],
+      "tests": [
+        {
+          "name": "test_auth0_jwt_validation_success",
+          "category": "auth0",
+          "description": "Tests successful JWT validation with Auth0"
+        },
+        {
+          "name": "test_auth0_missing_authorization_header",
+          "category": "auth0",
+          "description": "Tests JWT validation with missing Authorization header"
+        },
+        {
+          "name": "test_auth0_expired_token",
+          "category": "auth0",
+          "description": "Tests JWT validation with expired token"
+        },
+        {
+          "name": "test_api_key_validation_success",
+          "category": "api_key",
+          "description": "Tests API key validation with valid key"
+        },
+        {
+          "name": "test_api_key_missing_header",
+          "category": "api_key",
+          "description": "Tests API key validation with missing X-API-Key header"
+        },
+        {
+          "name": "test_api_key_invalid_format",
+          "category": "api_key",
+          "description": "Tests API key validation with invalid format"
+        },
+        {
+          "name": "test_api_key_revoked",
+          "category": "api_key",
+          "description": "Tests API key validation with revoked key"
+        },
+        {
+          "name": "test_api_key_expired",
+          "category": "api_key",
+          "description": "Tests API key validation with expired key"
+        },
+        {
+          "name": "test_api_key_not_found",
+          "category": "api_key",
+          "description": "Tests API key validation with non-existent key"
+        },
+        {
+          "name": "test_api_key_caching",
+          "category": "api_key",
+          "description": "Tests API key caching behavior with Redis"
+        },
+        {
+          "name": "test_rate_limiting_per_tier",
+          "category": "rate_limiting",
+          "description": "Tests rate limiting enforcement per subscription tier"
+        },
+        {
+          "name": "test_concurrent_api_key_validations",
+          "category": "concurrency",
+          "description": "Tests concurrent API key validations"
+        },
+        {
+          "name": "test_api_key_custom_scopes",
+          "category": "api_key",
+          "description": "Tests API key with custom scopes"
+        },
+        {
+          "name": "test_api_key_last_used_tracking",
+          "category": "api_key",
+          "description": "Tests API key last_used_at tracking"
+        }
+      ],
+      "dependencies": [
+        "sqlx",
+        "redis",
+        "wiremock",
+        "jsonwebtoken",
+        "sha2",
+        "tokio"
+      ],
+      "status": "active",
+      "ignored": true,
+      "coverage_goal": ">90%",
+      "run_command": "cargo test --test integration_auth_flow -- --ignored"
+    },
+    {
+      "name": "integration_api_key_management",
+      "path": "tests/integration/api_key_management.rs",
+      "description": "Integration tests for API key management (CRUD operations, limits, security)",
+      "test_count": 18,
+      "coverage_areas": [
+        "Creating API keys with various configurations",
+        "Listing user's API keys",
+        "Revoking API keys",
+        "Updating API key metadata (name, scopes)",
+        "Per-tier key limits enforcement",
+        "Key usage tracking",
+        "Concurrent key operations",
+        "Key security (hashing, prefix extraction)",
+        "Key expiration",
+        "Custom scopes"
+      ],
+      "tests": [
+        {
+          "name": "test_create_api_key",
+          "category": "crud",
+          "description": "Tests creating a new API key"
+        },
+        {
+          "name": "test_create_api_key_with_expiration",
+          "category": "crud",
+          "description": "Tests creating API key with expiration date"
+        },
+        {
+          "name": "test_create_api_key_with_custom_scopes",
+          "category": "crud",
+          "description": "Tests creating API key with custom scopes"
+        },
+        {
+          "name": "test_list_api_keys",
+          "category": "crud",
+          "description": "Tests listing user's API keys"
+        },
+        {
+          "name": "test_list_api_keys_shows_revoked",
+          "category": "crud",
+          "description": "Tests listing API keys shows revoked status"
+        },
+        {
+          "name": "test_revoke_api_key",
+          "category": "crud",
+          "description": "Tests revoking an API key"
+        },
+        {
+          "name": "test_revoke_nonexistent_api_key",
+          "category": "crud",
+          "description": "Tests revoking a non-existent API key"
+        },
+        {
+          "name": "test_revoke_other_users_api_key",
+          "category": "security",
+          "description": "Tests that users cannot revoke other users' API keys"
+        },
+        {
+          "name": "test_update_api_key_name",
+          "category": "crud",
+          "description": "Tests updating API key name"
+        },
+        {
+          "name": "test_update_api_key_scopes",
+          "category": "crud",
+          "description": "Tests updating API key scopes"
+        },
+        {
+          "name": "test_api_key_limit_free_tier",
+          "category": "limits",
+          "description": "Tests per-tier API key limits for free tier"
+        },
+        {
+          "name": "test_api_key_limit_excludes_revoked",
+          "category": "limits",
+          "description": "Tests that revoked keys don't count toward limit"
+        },
+        {
+          "name": "test_api_key_usage_tracking",
+          "category": "tracking",
+          "description": "Tests API key usage tracking (last_used_at)"
+        },
+        {
+          "name": "test_generate_unique_keys",
+          "category": "security",
+          "description": "Tests generating unique API keys"
+        },
+        {
+          "name": "test_api_key_hash_consistency",
+          "category": "security",
+          "description": "Tests API key hash consistency"
+        },
+        {
+          "name": "test_api_key_prefix_extraction",
+          "category": "security",
+          "description": "Tests API key prefix extraction"
+        },
+        {
+          "name": "test_concurrent_api_key_creation",
+          "category": "concurrency",
+          "description": "Tests concurrent API key creation"
+        }
+      ],
+      "dependencies": [
+        "sqlx",
+        "redis",
+        "sha2",
+        "uuid",
+        "chrono",
+        "tokio"
+      ],
+      "status": "active",
+      "ignored": true,
+      "coverage_goal": ">90%",
+      "run_command": "cargo test --test integration_api_key_management -- --ignored"
+    },
+    {
+      "name": "integration_billing_flow",
+      "path": "tests/integration/billing_flow.rs",
+      "description": "Integration tests for billing flows (subscriptions, webhooks, quotas, proration)",
+      "test_count": 16,
+      "coverage_areas": [
+        "Subscription creation for all tiers",
+        "Plan upgrades and downgrades",
+        "Usage quota enforcement",
+        "Monthly quota reset",
+        "Stripe webhook processing (subscription events)",
+        "Payment failure handling",
+        "Proration calculations",
+        "Subscription status transitions",
+        "One subscription per user constraint"
+      ],
+      "tests": [
+        {
+          "name": "test_create_subscription",
+          "category": "subscriptions",
+          "description": "Tests creating a new subscription"
+        },
+        {
+          "name": "test_subscription_tiers",
+          "category": "subscriptions",
+          "description": "Tests subscription with all tiers"
+        },
+        {
+          "name": "test_plan_upgrade",
+          "category": "subscriptions",
+          "description": "Tests plan upgrade from free to starter"
+        },
+        {
+          "name": "test_plan_downgrade",
+          "category": "subscriptions",
+          "description": "Tests plan downgrade from professional to starter"
+        },
+        {
+          "name": "test_usage_quota_enforcement",
+          "category": "quotas",
+          "description": "Tests usage quota enforcement at limit"
+        },
+        {
+          "name": "test_usage_under_quota",
+          "category": "quotas",
+          "description": "Tests usage under quota"
+        },
+        {
+          "name": "test_monthly_quota_reset",
+          "category": "quotas",
+          "description": "Tests monthly quota reset"
+        },
+        {
+          "name": "test_stripe_webhook_subscription_created",
+          "category": "webhooks",
+          "description": "Tests Stripe webhook for subscription created"
+        },
+        {
+          "name": "test_stripe_webhook_subscription_updated",
+          "category": "webhooks",
+          "description": "Tests Stripe webhook for subscription updated"
+        },
+        {
+          "name": "test_stripe_webhook_subscription_canceled",
+          "category": "webhooks",
+          "description": "Tests Stripe webhook for subscription canceled"
+        },
+        {
+          "name": "test_stripe_webhook_payment_failed",
+          "category": "webhooks",
+          "description": "Tests Stripe webhook for payment failed"
+        },
+        {
+          "name": "test_proration_on_plan_change",
+          "category": "billing",
+          "description": "Tests proration calculation on plan change"
+        },
+        {
+          "name": "test_subscription_period_boundaries",
+          "category": "subscriptions",
+          "description": "Tests subscription period boundaries"
+        },
+        {
+          "name": "test_subscription_status_transitions",
+          "category": "subscriptions",
+          "description": "Tests subscription status transitions"
+        },
+        {
+          "name": "test_one_subscription_per_user",
+          "category": "constraints",
+          "description": "Tests one subscription per user constraint"
+        }
+      ],
+      "dependencies": [
+        "sqlx",
+        "wiremock",
+        "serde_json",
+        "chrono",
+        "uuid",
+        "tokio"
+      ],
+      "status": "active",
+      "ignored": true,
+      "coverage_goal": ">85%",
+      "run_command": "cargo test --test integration_billing_flow -- --ignored"
+    },
+    {
+      "name": "integration_gdpr_compliance",
+      "path": "tests/integration/gdpr_compliance.rs",
+      "description": "Integration tests for GDPR compliance (data export, deletion, anonymization, consent)",
+      "test_count": 14,
+      "coverage_areas": [
+        "Data export (all user data as JSON)",
+        "Data anonymization (right to be forgotten)",
+        "Soft delete mechanism",
+        "Email verification tracking",
+        "User metadata storage",
+        "Audit log creation on sensitive operations",
+        "Data retention via partitioning",
+        "Email format validation"
+      ],
+      "tests": [
+        {
+          "name": "test_gdpr_data_export",
+          "category": "gdpr",
+          "description": "Tests GDPR data export for a user"
+        },
+        {
+          "name": "test_gdpr_export_format",
+          "category": "gdpr",
+          "description": "Tests GDPR data export format and completeness"
+        },
+        {
+          "name": "test_gdpr_data_anonymization",
+          "category": "gdpr",
+          "description": "Tests GDPR data anonymization (right to be forgotten)"
+        },
+        {
+          "name": "test_anonymization_revokes_api_keys",
+          "category": "gdpr",
+          "description": "Tests anonymization revokes all API keys"
+        },
+        {
+          "name": "test_anonymization_cancels_subscription",
+          "category": "gdpr",
+          "description": "Tests anonymization cancels subscription"
+        },
+        {
+          "name": "test_anonymization_creates_audit_log",
+          "category": "gdpr",
+          "description": "Tests anonymization creates audit log"
+        },
+        {
+          "name": "test_soft_delete_user",
+          "category": "gdpr",
+          "description": "Tests soft delete mechanism"
+        },
+        {
+          "name": "test_email_verification_tracking",
+          "category": "consent",
+          "description": "Tests email verification tracking (GDPR consent)"
+        },
+        {
+          "name": "test_user_metadata_storage",
+          "category": "consent",
+          "description": "Tests user metadata storage (GDPR transparent data storage)"
+        },
+        {
+          "name": "test_usage_metrics_partitioning",
+          "category": "retention",
+          "description": "Tests usage metrics partitioning"
+        },
+        {
+          "name": "test_audit_logs_partitioning",
+          "category": "retention",
+          "description": "Tests audit logs partitioning"
+        },
+        {
+          "name": "test_export_specific_data_types",
+          "category": "gdpr",
+          "description": "Tests exporting specific user data types"
+        },
+        {
+          "name": "test_email_format_validation",
+          "category": "validation",
+          "description": "Tests GDPR compliance email format validation"
+        }
+      ],
+      "dependencies": [
+        "sqlx",
+        "serde_json",
+        "chrono",
+        "uuid",
+        "tokio"
+      ],
+      "status": "active",
+      "ignored": true,
+      "coverage_goal": ">90%",
+      "run_command": "cargo test --test integration_gdpr_compliance -- --ignored"
+    },
+    {
+      "name": "integration_usage_tracking",
+      "path": "tests/integration/usage_tracking.rs",
+      "description": "Integration tests for usage tracking (metrics, aggregation, quotas, rate limits)",
+      "test_count": 14,
+      "coverage_areas": [
+        "Recording usage metrics",
+        "Aggregation by endpoint, engine, day",
+        "Monthly quota tracking",
+        "Response time percentiles (p50, p95, p99)",
+        "Error rate calculation",
+        "Token usage tracking (LLM endpoints)",
+        "Request ID for distributed tracing",
+        "Concurrent usage recording"
+      ],
+      "tests": [
+        {
+          "name": "test_record_usage_metric",
+          "category": "metrics",
+          "description": "Tests recording a usage metric"
+        },
+        {
+          "name": "test_usage_metrics_by_endpoint",
+          "category": "metrics",
+          "description": "Tests usage metrics with different endpoints"
+        },
+        {
+          "name": "test_usage_metrics_by_engine",
+          "category": "metrics",
+          "description": "Tests usage metrics with different engines"
+        },
+        {
+          "name": "test_monthly_quota_tracking",
+          "category": "quotas",
+          "description": "Tests tracking monthly quota usage"
+        },
+        {
+          "name": "test_quota_enforcement_at_limit",
+          "category": "quotas",
+          "description": "Tests quota enforcement when limit reached"
+        },
+        {
+          "name": "test_usage_aggregation_by_day",
+          "category": "aggregation",
+          "description": "Tests usage aggregation by day"
+        },
+        {
+          "name": "test_usage_aggregation_by_endpoint",
+          "category": "aggregation",
+          "description": "Tests usage aggregation by endpoint"
+        },
+        {
+          "name": "test_response_time_percentiles",
+          "category": "metrics",
+          "description": "Tests response time percentiles calculation"
+        },
+        {
+          "name": "test_error_rate_calculation",
+          "category": "metrics",
+          "description": "Tests error rate calculation"
+        },
+        {
+          "name": "test_token_usage_tracking",
+          "category": "metrics",
+          "description": "Tests token usage tracking for LLM endpoints"
+        },
+        {
+          "name": "test_request_id_tracking",
+          "category": "tracing",
+          "description": "Tests request ID for distributed tracing"
+        },
+        {
+          "name": "test_concurrent_usage_recording",
+          "category": "concurrency",
+          "description": "Tests concurrent usage recording"
+        }
+      ],
+      "dependencies": [
+        "sqlx",
+        "chrono",
+        "uuid",
+        "tokio",
+        "futures"
+      ],
+      "status": "active",
+      "ignored": true,
+      "coverage_goal": ">85%",
+      "run_command": "cargo test --test integration_usage_tracking -- --ignored"
+    },
+    {
+      "name": "integration_tests",
+      "path": "tests/integration.rs",
+      "description": "Real-world integration tests against live websites (all #[ignore] by default)",
+      "test_count": 23,
+      "coverage_areas": [
+        "Sandbox sites (quotes.toscrape.com, books.toscrape.com, webscraper.io)",
+        "Static documentation (example.com, MDN, Rust docs, Python docs)",
+        "HTTP edge cases (httpbin.org - status codes, delays, redirects)",
+        "Metadata extraction (ogp.me, schema.org, GitHub, NPM)",
+        "Legacy HTML (HTML 4.01, quirks mode)"
+      ],
+      "dependencies": [
+        "axum",
+        "tower",
+        "serde_json",
+        "tokio"
+      ],
+      "status": "pending",
+      "ignored": true,
+      "run_command": "cargo test --test integration -- --ignored"
+    },
+    {
+      "name": "benchmark_tests",
+      "path": "tests/benchmark.rs",
+      "description": "Comprehensive benchmarking suite with metrics collection and CSV/JSON output",
+      "test_count": 6,
+      "coverage_areas": [
+        "Full test URL corpus benchmarking",
+        "Quick health checks",
+        "Performance stress testing",
+        "Category-specific benchmarks",
+        "Timeout handling",
+        "Metrics collection and reporting"
+      ],
+      "dependencies": [
+        "axum",
+        "tower",
+        "serde_json",
+        "tokio",
+        "chrono"
+      ],
+      "status": "pending",
+      "ignored": true,
+      "run_command": "cargo test --test benchmark -- --ignored --nocapture"
+    }
+  ],
+  "metadata": {
+    "created": "2025-10-04",
+    "updated": "2025-11-07",
+    "description": "Canonical test catalog for essence web retrieval engine and SaaS platform",
+    "total_test_suites": 7,
+    "total_tests": 128,
+    "total_fixtures": 5,
+    "saas_platform_tests_added": "2025-11-07"
+  },
+  "test_categories": {
+    "basic": "Basic scraping functionality tests",
+    "validation": "Input validation tests",
+    "markdown": "Markdown conversion tests",
+    "metadata": "Metadata extraction tests (title, description, Open Graph)",
+    "links": "Link extraction tests",
+    "images": "Image extraction tests",
+    "error_handling": "Error handling and edge case tests",
+    "robots_txt": "Robots.txt compliance tests",
+    "formats": "Output format tests",
+    "options": "Advanced options and filtering tests",
+    "integration": "Real URL integration tests (ignored by default)",
+    "auth0": "Auth0 JWT authentication tests",
+    "api_key": "API key validation and management tests",
+    "rate_limiting": "Rate limiting enforcement tests",
+    "subscriptions": "Subscription management tests",
+    "quotas": "Usage quota enforcement tests",
+    "webhooks": "Stripe webhook processing tests",
+    "billing": "Billing and payment tests",
+    "gdpr": "GDPR compliance tests (data export, deletion, anonymization)",
+    "consent": "User consent and verification tests",
+    "retention": "Data retention and partitioning tests",
+    "metrics": "Usage metrics and tracking tests",
+    "aggregation": "Data aggregation and analytics tests",
+    "tracing": "Distributed tracing tests",
+    "security": "Security and access control tests",
+    "concurrency": "Concurrent operation tests",
+    "constraints": "Database constraint tests"
+  },
+  "coverage_summary": {
+    "endpoint_coverage": [
+      "/api/v1/scrape",
+      "/api/v1/api-keys (GET, POST, DELETE, PATCH)"
+    ],
+    "feature_coverage": [
+      "Static HTML scraping",
+      "Markdown conversion",
+      "HTML output (cleaned and raw)",
+      "Metadata extraction (basic and Open Graph)",
+      "Link extraction",
+      "Image extraction",
+      "Error handling (validation, HTTP errors, timeouts)",
+      "Robots.txt compliance",
+      "Content filtering (onlyMainContent, includeTags, excludeTags)",
+      "Custom headers",
+      "Multiple output formats",
+      "Auth0 JWT authentication",
+      "API key authentication",
+      "API key management (CRUD)",
+      "Rate limiting per tier",
+      "Subscription management",
+      "Usage quota enforcement",
+      "Stripe webhook processing",
+      "GDPR data export",
+      "GDPR data anonymization",
+      "Usage metrics tracking",
+      "Audit logging"
+    ],
+    "pending_features": [
+      "Screenshot capture",
+      "PDF parsing",
+      "JavaScript rendering",
+      "Browser actions",
+      "JSON extraction with schema",
+      "Change tracking",
+      "Caching"
+    ]
+  },
+  "test_infrastructure": {
+    "test_database": "PostgreSQL with isolated databases per test",
+    "test_cache": "Redis (optional, gracefully skipped if unavailable)",
+    "mock_servers": [
+      "MockAuth0 (Auth0 JWKS endpoint)",
+      "MockStripe (Stripe webhooks)"
+    ],
+    "utilities": [
+      "TestDb - Isolated database creation and cleanup",
+      "TestUser - Test user creation with subscriptions",
+      "TestRedis - Optional Redis client",
+      "seed_usage_metrics - Usage data seeding",
+      "seed_audit_logs - Audit log seeding"
+    ]
+  },
+  "ci_cd_integration": {
+    "github_actions": true,
+    "required_services": [
+      "PostgreSQL 14+",
+      "Redis 7+ (optional)"
+    ],
+    "environment_variables": [
+      "DATABASE_URL",
+      "REDIS_URL",
+      "AUTH0_DOMAIN",
+      "AUTH0_AUDIENCE",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET"
+    ]
+  }
+}
