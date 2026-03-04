@@ -131,6 +131,7 @@ pub struct EssenceMcpServer {
 #[tool_router]
 impl EssenceMcpServer {
     /// Create a new `EssenceMcpServer` with all tool routes registered.
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             tool_router: Self::tool_router(),

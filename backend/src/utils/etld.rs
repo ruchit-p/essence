@@ -12,18 +12,9 @@
 //! - `github.io` → `github.io` (public suffix itself)
 
 use crate::error::{Result, ScrapeError};
-use once_cell::sync::Lazy;
-use publicsuffix::{List, Psl};
-use std::sync::Arc;
+use psl::{List, Psl};
 use tracing::debug;
 use url::Url;
-
-/// Global Public Suffix List (loaded once, thread-safe)
-static PSL: Lazy<Arc<List>> = Lazy::new(|| {
-    // Use the bundled PSL data from the publicsuffix crate
-    let list = List::new();
-    Arc::new(list)
-});
 
 /// Extract eTLD+1 (registrable domain) from a URL
 ///
@@ -56,7 +47,7 @@ pub fn extract_etld_plus_one(url_str: &str) -> Result<String> {
         .ok_or_else(|| ScrapeError::InvalidUrl("No host in URL".to_string()))?;
 
     // Use Psl::domain() to get the registrable domain
-    match PSL.domain(host.as_bytes()) {
+    match List.domain(host.as_bytes()) {
         Some(domain) => {
             let etld_plus_one = std::str::from_utf8(domain.as_bytes())
                 .map_err(|e| ScrapeError::InvalidUrl(format!("Invalid domain encoding: {}", e)))?
@@ -99,7 +90,7 @@ pub fn extract_etld_plus_one_or_host(url_str: &str) -> Result<String> {
 pub fn is_public_suffix(domain: &str) -> bool {
     // A domain is a public suffix if PSL.domain() returns None for it
     // (meaning there's no registrable domain above the suffix)
-    PSL.domain(domain.as_bytes()).is_none()
+    List.domain(domain.as_bytes()).is_none()
 }
 
 #[cfg(test)]

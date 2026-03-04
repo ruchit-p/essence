@@ -401,6 +401,7 @@ fn remove_nested_nav(html: &str) -> String {
 /// Layout tables are characterized by:
 /// - No <th> tags (data tables have headers)
 /// - Nested tables inside cells
+///
 /// Run html2md::parse_html in a thread with a larger stack to handle deeply nested HTML
 /// (e.g., Amazon product pages with 100+ nesting levels that overflow the default 8MB stack).
 fn safe_parse_html(html: &str) -> String {
@@ -417,7 +418,7 @@ fn safe_parse_html(html: &str) -> String {
         .spawn(move || html2md::parse_html(&html_owned))
         .and_then(|handle| {
             handle.join().map_err(|_| {
-                std::io::Error::new(std::io::ErrorKind::Other, "html2md thread panicked")
+                std::io::Error::other("html2md thread panicked")
             })
         });
 
@@ -442,6 +443,7 @@ fn safe_parse_html(html: &str) -> String {
 ///  1. Resolve relative URLs to absolute on <a href> and <img src> tags
 ///  2. Convert <pre><code> blocks to placeholder fenced code (with language detection)
 ///  3. Filter gutter/line-number elements from code blocks
+///
 /// Doing this in HTML-space (before html2md) produces much cleaner markdown output.
 fn preprocess_html_for_conversion(html: &str, base_url: &str) -> String {
     let base = match Url::parse(base_url) {
@@ -833,7 +835,7 @@ fn clean_markdown(markdown: &str) -> String {
         let words: Vec<&str> = text.split_whitespace().collect();
         let len = words.len();
         // Check if text is exactly two identical halves (e.g. "Apple Apple", "HP HP")
-        if len >= 2 && len % 2 == 0 {
+        if len >= 2 && len.is_multiple_of(2) {
             let half = len / 2;
             if words[..half] == words[half..] {
                 return format!("[{}](", words[..half].join(" "));

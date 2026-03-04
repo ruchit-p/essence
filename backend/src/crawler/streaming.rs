@@ -87,7 +87,7 @@ pub async fn crawl_website_stream(
         let current_depth = prioritized_url.depth;
 
         // Check memory limit periodically (every 10 iterations)
-        if (success_count + error_count) % 10 == 0 {
+        if (success_count + error_count).is_multiple_of(10) {
             if let Err(e) = memory_monitor.check_memory_limit() {
                 warn!("Memory limit check failed: {}", e);
                 let error_msg = e.to_string();
@@ -202,7 +202,7 @@ pub async fn crawl_website_stream(
                     url: document.url.clone().unwrap_or_else(|| current_url.clone()),
                     title: document.title.clone(),
                     markdown: document.markdown.clone(),
-                    metadata: document.metadata.clone(),
+                    metadata: Box::new(document.metadata.clone()),
                 };
 
                 if tx.send(Ok(doc_event)).await.is_err() {

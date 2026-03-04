@@ -1,11 +1,24 @@
 [package]
-name = "essence"
+name = "essence-engine"
 version = "0.1.0"
 edition = "2021"
 description = "A fast web retrieval engine with HTTP-to-browser fallback, producing LLM-ready Markdown"
 license = "MIT"
 repository = "https://github.com/ruchit-p/essence"
+homepage = "https://essence.foundation"
+readme = "../README.md"
 authors = ["Ruchit Patel"]
+keywords = ["web-scraping", "markdown", "browser-automation", "mcp", "llm"]
+categories = ["web-programming::http-client", "command-line-utilities"]
+exclude = ["vendor/*", "tests/*", "fixtures/*", "benches/*", ".env*"]
+
+[[bin]]
+name = "essence"
+path = "src/main.rs"
+
+[lib]
+name = "essence"
+path = "src/lib.rs"
 
 [dependencies]
 # Web framework

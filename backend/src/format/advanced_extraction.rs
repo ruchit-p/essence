@@ -235,7 +235,7 @@ impl AdvancedExtractor {
     /// Estimate reading time in minutes (assuming 200 words per minute)
     pub fn estimate_reading_time(word_count: usize) -> usize {
         const WORDS_PER_MINUTE: usize = 200;
-        (word_count + WORDS_PER_MINUTE - 1) / WORDS_PER_MINUTE
+        word_count.div_ceil(WORDS_PER_MINUTE)
     }
 }
 

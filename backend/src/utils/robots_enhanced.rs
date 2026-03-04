@@ -184,7 +184,8 @@ mod tests {
     fn test_domain_extraction() {
         let url = Url::parse("https://www.example.com/path/to/page").unwrap();
         let domain = extract_domain(&url).unwrap();
-        assert_eq!(domain, "www.example.com");
+        // extract_domain uses eTLD+1, so www.example.com → example.com
+        assert_eq!(domain, "example.com");
     }
 
     #[test]
@@ -204,8 +205,9 @@ Disallow: /admin
         let delay_essence = parse_crawl_delay(robots_txt, "Essence");
         assert_eq!(delay_essence, Some(0.5));
 
+        // OtherBot matches the wildcard (*) block, so gets its crawl delay
         let delay_other = parse_crawl_delay(robots_txt, "OtherBot");
-        assert_eq!(delay_other, None);
+        assert_eq!(delay_other, Some(2.0));
     }
 
     #[test]

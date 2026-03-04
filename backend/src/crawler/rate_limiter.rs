@@ -8,9 +8,11 @@ use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
 use url::Url;
 
+type DomainLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
+
 /// Per-domain rate limiter to ensure respectful crawling
 pub struct DomainRateLimiter {
-    limiters: Arc<Mutex<HashMap<String, Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>>>>,
+    limiters: Arc<Mutex<HashMap<String, Arc<DomainLimiter>>>>,
     default_quota: Quota,
 }
 

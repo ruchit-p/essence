@@ -11,50 +11,42 @@ pub fn rewrite_url(url: &str) -> String {
     let path = parsed.path();
 
     // Google Slides: → PDF export (check first to avoid conflict with Google Docs)
-    if host.contains("docs.google.com") && path.contains("/presentation/") {
-        if path.contains("/edit") {
-            let rewritten = url.replace("/edit", "/export/pdf");
-            debug!("Rewrote Google Slides URL: {} → {}", url, rewritten);
-            return rewritten;
-        }
+    if host.contains("docs.google.com") && path.contains("/presentation/") && path.contains("/edit") {
+        let rewritten = url.replace("/edit", "/export/pdf");
+        debug!("Rewrote Google Slides URL: {} → {}", url, rewritten);
+        return rewritten;
     }
 
     // Google Docs: /edit → /export?format=pdf
-    if host.contains("docs.google.com") && path.contains("/document/") {
-        if path.contains("/edit") {
-            let rewritten = url.replace("/edit", "/export?format=pdf");
-            debug!("Rewrote Google Docs URL: {} → {}", url, rewritten);
-            return rewritten;
-        }
+    if host.contains("docs.google.com") && path.contains("/document/") && path.contains("/edit") {
+        let rewritten = url.replace("/edit", "/export?format=pdf");
+        debug!("Rewrote Google Docs URL: {} → {}", url, rewritten);
+        return rewritten;
     }
 
     // Google Sheets: → HTML export
-    if host.contains("docs.google.com") && path.contains("/spreadsheets/") {
-        if path.contains("/edit") {
-            // Extract document ID
-            if let Some(doc_id) = extract_google_doc_id(path) {
-                let rewritten = format!(
-                    "https://docs.google.com/spreadsheets/d/{}/gviz/tq?tqx=out:html",
-                    doc_id
-                );
-                debug!("Rewrote Google Sheets URL: {} → {}", url, rewritten);
-                return rewritten;
-            }
+    if host.contains("docs.google.com") && path.contains("/spreadsheets/") && path.contains("/edit") {
+        // Extract document ID
+        if let Some(doc_id) = extract_google_doc_id(path) {
+            let rewritten = format!(
+                "https://docs.google.com/spreadsheets/d/{}/gviz/tq?tqx=out:html",
+                doc_id
+            );
+            debug!("Rewrote Google Sheets URL: {} → {}", url, rewritten);
+            return rewritten;
         }
     }
 
     // Google Drive: /view → /uc?export=download
-    if host.contains("drive.google.com") && path.contains("/file/") {
-        if path.contains("/view") {
-            // Extract file ID
-            if let Some(file_id) = extract_google_drive_id(path) {
-                let rewritten = format!(
-                    "https://drive.google.com/uc?export=download&id={}",
-                    file_id
-                );
-                debug!("Rewrote Google Drive URL: {} → {}", url, rewritten);
-                return rewritten;
-            }
+    if host.contains("drive.google.com") && path.contains("/file/") && path.contains("/view") {
+        // Extract file ID
+        if let Some(file_id) = extract_google_drive_id(path) {
+            let rewritten = format!(
+                "https://drive.google.com/uc?export=download&id={}",
+                file_id
+            );
+            debug!("Rewrote Google Drive URL: {} → {}", url, rewritten);
+            return rewritten;
         }
     }
 
@@ -66,14 +58,14 @@ pub fn rewrite_url(url: &str) -> String {
 /// Path format: /document/d/{ID}/edit or /spreadsheets/d/{ID}/edit
 fn extract_google_doc_id(path: &str) -> Option<String> {
     let parts: Vec<&str> = path.split('/').collect();
-    
+
     // Find "d" segment, next one is the ID
     for (i, part) in parts.iter().enumerate() {
         if *part == "d" && i + 1 < parts.len() {
             return Some(parts[i + 1].to_string());
         }
     }
-    
+
     None
 }
 

@@ -134,7 +134,7 @@ pub struct ScrapeResponse {
 }
 
 /// Document structure containing scraped data
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
     /// Page title
@@ -271,22 +271,6 @@ impl Default for Metadata {
     }
 }
 
-impl Default for Document {
-    fn default() -> Self {
-        Self {
-            title: None,
-            description: None,
-            url: None,
-            markdown: None,
-            html: None,
-            raw_html: None,
-            links: None,
-            images: None,
-            screenshot: None,
-            metadata: Metadata::default(),
-        }
-    }
-}
 
 // Default function for optional bools
 fn default_true_option() -> Option<bool> {
@@ -764,7 +748,7 @@ pub enum CrawlEvent {
         url: String,
         title: Option<String>,
         markdown: Option<String>,
-        metadata: Metadata,
+        metadata: Box<Metadata>,
     },
     /// Error event for individual URL
     Error {
