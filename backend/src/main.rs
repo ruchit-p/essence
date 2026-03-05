@@ -1,3 +1,4 @@
+use clap::Parser;
 use essence::api;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -17,25 +18,70 @@ use rmcp::transport::streamable_http_server::{
     StreamableHttpService, StreamableHttpServerConfig,
 };
 
+#[derive(Parser)]
+#[command(name = "essence", about = "Essence web retrieval engine")]
+struct Cli {
+    /// Run as a stdio MCP server (for Claude Desktop integration)
+    #[arg(long)]
+    stdio: bool,
+
+    /// Port to listen on (HTTP mode only)
+    #[arg(long, env = "PORT", default_value = "8080")]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
 
-    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "essence=info".to_string());
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| log_level.into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    let cli = Cli::parse();
 
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "essence=info".to_string());
+
+    if cli.stdio {
+        // In stdio mode, log to stderr so stdout stays clean for MCP JSON-RPC
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| log_level.into()),
+            )
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+            .init();
+
+        run_stdio().await;
+    } else {
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| log_level.into()),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+
+        run_http(cli.port).await;
+    }
+}
+
+async fn run_stdio() {
+    use rmcp::transport::io::stdio;
+    use rmcp::ServiceExt;
+
+    info!("Starting Essence MCP server in stdio mode");
+
+    let server = essence::mcp::EssenceMcpServer::new();
+    let running = server
+        .serve(stdio())
+        .await
+        .expect("Failed to start stdio MCP server");
+
+    running.waiting().await.expect("Stdio MCP server error");
+
+    info!("Stdio MCP server stopped");
+}
+
+async fn run_http(port: u16) {
     info!("Starting Essence web retrieval engine");
 
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(8080);
     let max_request_size_mb: usize = std::env::var("MAX_REQUEST_SIZE_MB")
         .ok()
         .and_then(|s| s.parse().ok())
