@@ -46,20 +46,23 @@ impl SitemapParser {
 
         let mut all_urls = HashSet::new();
 
-        // Strategy 1: Check robots.txt for Sitemap directive
-        if let Ok(sitemap_url) = self.check_robots_txt(base_url).await {
-            info!("Found sitemap URL in robots.txt: {}", sitemap_url);
-            if self
-                .fetch_and_parse_sitemap(&sitemap_url, &mut all_urls)
-                .await
-                .is_ok()
-                && !all_urls.is_empty()
-            {
-                info!(
-                    "Successfully fetched {} URLs from robots.txt sitemap",
-                    all_urls.len()
-                );
-                return Ok(all_urls.into_iter().collect());
+        let mut visited = HashSet::new();
+
+        // Strategy 1: Check robots.txt for all Sitemap directives
+        if let Ok(robots_sitemaps) = self.check_robots_txt(base_url).await {
+            info!("Found {} sitemap URL(s) in robots.txt", robots_sitemaps.len());
+            for sitemap_url in &robots_sitemaps {
+                info!("Fetching robots.txt sitemap: {}", sitemap_url);
+                match self
+                    .fetch_and_parse_sitemap(sitemap_url, &mut all_urls, 0, &mut visited)
+                    .await
+                {
+                    Ok(_) => info!(
+                        "Successfully fetched URLs from robots.txt sitemap: {}",
+                        sitemap_url
+                    ),
+                    Err(e) => debug!("Failed to fetch robots.txt sitemap {}: {}", sitemap_url, e),
+                }
             }
         }
 
@@ -68,12 +71,14 @@ impl SitemapParser {
             format!("{}/sitemap.xml", base_url.trim_end_matches('/')),
             format!("{}/sitemap_index.xml", base_url.trim_end_matches('/')),
             format!("{}/sitemap-index.xml", base_url.trim_end_matches('/')),
+            format!("{}/sitemap.xml.gz", base_url.trim_end_matches('/')),
+            format!("{}/sitemap.txt", base_url.trim_end_matches('/')),
         ];
 
         for sitemap_url in sitemap_urls {
             debug!("Trying sitemap location: {}", sitemap_url);
             match self
-                .fetch_and_parse_sitemap(&sitemap_url, &mut all_urls)
+                .fetch_and_parse_sitemap(&sitemap_url, &mut all_urls, 0, &mut visited)
                 .await
             {
                 Ok(_) => {
@@ -96,8 +101,8 @@ impl SitemapParser {
         Ok(all_urls.into_iter().collect())
     }
 
-    /// Check robots.txt for Sitemap directive
-    async fn check_robots_txt(&self, base_url: &str) -> Result<String> {
+    /// Check robots.txt for all Sitemap directives
+    async fn check_robots_txt(&self, base_url: &str) -> Result<Vec<String>> {
         let robots_url = format!("{}/robots.txt", base_url.trim_end_matches('/'));
         debug!("Checking robots.txt at: {}", robots_url);
 
@@ -121,32 +126,58 @@ impl SitemapParser {
             .await
             .map_err(|e| ScrapeError::Internal(format!("Failed to read robots.txt: {}", e)))?;
 
-        // Parse "Sitemap: <url>" directive (case-insensitive)
+        // Parse all "Sitemap: <url>" directives (case-insensitive)
+        let mut sitemap_urls = Vec::new();
         for line in text.lines() {
             let trimmed = line.trim();
             if trimmed.to_lowercase().starts_with("sitemap:") {
                 if let Some(url) = trimmed.split_whitespace().nth(1) {
-                    return Ok(url.to_string());
+                    sitemap_urls.push(url.to_string());
                 }
             }
         }
 
-        Err(ScrapeError::Internal(
-            "No sitemap directive in robots.txt".to_string(),
-        ))
+        if sitemap_urls.is_empty() {
+            return Err(ScrapeError::Internal(
+                "No sitemap directive in robots.txt".to_string(),
+            ));
+        }
+
+        Ok(sitemap_urls)
     }
 
-    /// Fetch and parse a single sitemap URL
+    /// Maximum recursion depth for sitemap index traversal
+    const MAX_SITEMAP_DEPTH: u32 = 5;
+
+    /// Fetch and parse a single sitemap URL with depth limit and cycle detection
     fn fetch_and_parse_sitemap<'a>(
         &'a self,
         sitemap_url: &'a str,
         all_urls: &'a mut HashSet<String>,
+        depth: u32,
+        visited: &'a mut HashSet<String>,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
+            // Depth limit
+            if depth > Self::MAX_SITEMAP_DEPTH {
+                debug!(
+                    "Skipping sitemap {} — exceeded max depth {}",
+                    sitemap_url,
+                    Self::MAX_SITEMAP_DEPTH
+                );
+                return Ok(());
+            }
+
+            // Cycle detection
+            if !visited.insert(sitemap_url.to_string()) {
+                debug!("Skipping already-visited sitemap: {}", sitemap_url);
+                return Ok(());
+            }
+
             let response = self
                 .client
                 .get(sitemap_url)
-                .timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(30))
                 .send()
                 .await
                 .map_err(ScrapeError::RequestFailed)?;
@@ -158,22 +189,53 @@ impl SitemapParser {
                 )));
             }
 
-            let content = response
-                .text()
+            let bytes = response
+                .bytes()
                 .await
                 .map_err(|e| ScrapeError::Internal(format!("Failed to read sitemap content: {}", e)))?;
 
-            self.parse_sitemap_content(&content, all_urls).await
+            // Detect gzip (magic bytes 0x1f, 0x8b) and decompress if needed
+            let content = if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
+                use flate2::read::GzDecoder;
+                use std::io::Read;
+                let mut decoder = GzDecoder::new(&bytes[..]);
+                let mut decompressed = String::new();
+                decoder.read_to_string(&mut decompressed).map_err(|e| {
+                    ScrapeError::Internal(format!("Failed to decompress gzip sitemap: {}", e))
+                })?;
+                decompressed
+            } else {
+                String::from_utf8_lossy(&bytes).to_string()
+            };
+
+            self.parse_sitemap_content(&content, all_urls, depth, visited)
+                .await
         })
     }
 
-    /// Parse sitemap XML content and extract URLs
+    /// Parse sitemap XML (or plain text) content and extract URLs
     fn parse_sitemap_content<'a>(
         &'a self,
         content: &'a str,
         all_urls: &'a mut HashSet<String>,
+        depth: u32,
+        visited: &'a mut HashSet<String>,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
+            // Plain text sitemap: if content doesn't start with '<', treat each
+            // non-empty line beginning with "http" as a URL.
+            let trimmed_content = content.trim();
+            if !trimmed_content.starts_with('<') {
+                debug!("Detected plain text sitemap format");
+                for line in trimmed_content.lines() {
+                    let line = line.trim();
+                    if !line.is_empty() && line.starts_with("http") {
+                        all_urls.insert(line.to_string());
+                    }
+                }
+                return Ok(());
+            }
+
             // Check if this is a sitemap index (contains <sitemapindex> tag)
             if content.contains("<sitemapindex") {
                 debug!("Detected sitemap index format");
@@ -187,7 +249,10 @@ impl SitemapParser {
                         let url = url_match.as_str().trim();
                         debug!("Found nested sitemap: {}", url);
                         sitemap_count += 1;
-                        match self.fetch_and_parse_sitemap(url, all_urls).await {
+                        match self
+                            .fetch_and_parse_sitemap(url, all_urls, depth + 1, visited)
+                            .await
+                        {
                             Ok(_) => debug!("Successfully parsed nested sitemap: {}", url),
                             Err(e) => debug!("Failed to parse nested sitemap {}: {}", url, e),
                         }
@@ -208,7 +273,9 @@ impl SitemapParser {
                     if let Some(url_match) = cap.get(1) {
                         let url = url_match.as_str().trim();
                         debug!("Found nested sitemap: {}", url);
-                        let _ = self.fetch_and_parse_sitemap(url, all_urls).await;
+                        let _ = self
+                            .fetch_and_parse_sitemap(url, all_urls, depth + 1, visited)
+                            .await;
                     }
                 }
             } else {
@@ -266,7 +333,10 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let parser = SitemapParser::new().unwrap();
-            let result = parser.parse_sitemap_content(sitemap_xml, &mut urls).await;
+            let mut visited = HashSet::new();
+            let result = parser
+                .parse_sitemap_content(sitemap_xml, &mut urls, 0, &mut visited)
+                .await;
             assert!(result.is_ok());
         });
 

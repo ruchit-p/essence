@@ -21,6 +21,7 @@ async fn test_streaming_crawl_basic() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     // Spawn crawl task
@@ -83,6 +84,7 @@ async fn test_streaming_crawl_invalid_url() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let result = crawl_website_stream(request, tx).await;
@@ -109,6 +111,7 @@ async fn test_streaming_crawl_with_limit() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     tokio::spawn(async move {
@@ -145,6 +148,7 @@ async fn test_streaming_crawl_client_disconnect() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let crawl_handle = tokio::spawn(async move {
@@ -176,6 +180,7 @@ async fn test_streaming_event_order() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     tokio::spawn(async move {

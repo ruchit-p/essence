@@ -90,11 +90,17 @@ glob-match = "0.2"
 # Regex for sitemap parsing
 regex = "1"
 
+# Gzip decompression for .gz sitemaps
+flate2 = "1"
+
 # Charset detection for international content
 encoding_rs = "0.8"
 
 # URL encoding
 percent-encoding = "2"
+
+# Platform-specific memory monitoring
+libc = "0.2"
 
 # Environment configuration
 dotenvy = "0.15"

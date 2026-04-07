@@ -135,23 +135,26 @@ impl EngineRacer {
                         );
                         // Fall through to race with browser
                     } else if self.validate_quality {
-                        // Validate quality if enabled
-                        // We need markdown to validate, so do a quick conversion
-                        let html_text = scraper::Html::parse_document(&raw.html)
-                            .root_element()
-                            .text()
-                            .collect::<String>();
-
-                        if html_text.trim().len() > 100 {
+                        // Check visible text quality (excluding script/style)
+                        let detection = crate::engines::detection::RenderingDetector::needs_javascript(&raw.html, &request.url);
+                        if detection.needs_js {
                             info!(
-                                "HTTP engine won the race ({}ms) with good quality",
-                                http_duration.as_millis()
+                                "SPA/JS detected ({}), racing with browser for {}",
+                                detection.reason, request.url
                             );
-                            return Ok(raw);
+                            // Fall through to race with browser
                         } else {
+                            let text_len = extract_visible_text_len(&raw.html);
+                            if text_len > 200 {
+                                info!(
+                                    "HTTP engine won the race ({}ms) with good quality ({} chars)",
+                                    http_duration.as_millis(), text_len
+                                );
+                                return Ok(raw);
+                            }
                             warn!(
-                                "HTTP result has low quality (text length: {}), racing with browser",
-                                html_text.trim().len()
+                                "HTTP result has low quality (visible text: {} chars), racing with browser",
+                                text_len
                             );
                             // Fall through to race with browser
                         }
@@ -172,8 +175,14 @@ impl EngineRacer {
         // 2. HTTP failed or had low quality
         // Race both engines and take the first successful result
 
+        // When falling back to browser, add a wait for SPA hydration
+        let mut browser_request = request.clone();
+        if browser_request.wait_for < 2000 {
+            browser_request.wait_for = 2000;
+        }
+
         let browser_start = Instant::now();
-        let browser_future = self.browser_engine.scrape(request);
+        let browser_future = self.browser_engine.scrape(&browser_request);
 
         let (winning_result, winning_engine) = if !http_completed {
             // HTTP is still running, race it with browser
@@ -241,7 +250,7 @@ impl EngineRacer {
             _ = tokio::time::sleep(self.waterfall_delay) => None
         };
 
-        // Early HTTP success check - but validate status code first
+        // Early HTTP success check - validate status code AND content quality
         let should_continue_to_browser = if let Some(Ok(ref raw)) = http_result {
             // Check if we should fallback to browser for error/blocking status codes
             if should_fallback_to_browser(raw) {
@@ -250,8 +259,34 @@ impl EngineRacer {
                     raw.status_code
                 );
                 true // Continue to browser fallback
+            } else if self.validate_quality {
+                // Check visible text content quality — filter out script/style text.
+                // SPA shells have huge inline JS but almost no visible content.
+                // Two-layer quality check:
+                // 1. If the RenderingDetector says JS is needed, always fallback
+                // 2. Otherwise, check visible text length as a safety net
+                let detection = crate::engines::detection::RenderingDetector::needs_javascript(&raw.html, &request.url);
+                if detection.needs_js {
+                    info!(
+                        "SPA/JS detected ({}), falling back to browser for {}",
+                        detection.reason, request.url
+                    );
+                    true // Always use browser for detected SPAs
+                } else {
+                    let text_len = extract_visible_text_len(&raw.html);
+                    debug!("Quality check: visible_text_len={}, status={}", text_len, raw.status_code);
+
+                    if text_len > 200 {
+                        false // Good content, return HTTP
+                    } else {
+                        warn!(
+                            "HTTP result has low quality (visible text: {} chars), falling back to browser",
+                            text_len
+                        );
+                        true // Continue to browser fallback
+                    }
+                }
             } else {
-                // HTTP succeeded with good status code, return it
                 false
             }
         } else {
@@ -273,9 +308,13 @@ impl EngineRacer {
             }
         }
 
-        // Start browser
+        // Start browser — add wait for SPA hydration
+        let mut browser_request = request.clone();
+        if browser_request.wait_for < 2000 {
+            browser_request.wait_for = 2000;
+        }
         let browser_start = Instant::now();
-        let browser_future = self.browser_engine.scrape(request);
+        let browser_future = self.browser_engine.scrape(&browser_request);
 
         // Race remaining futures
         // If HTTP timed out (http_result is None), race both futures
@@ -368,6 +407,60 @@ fn should_fallback_to_browser(raw: &RawScrapeResult) -> bool {
         }
         _ => false,
     }
+}
+
+/// Extract visible text length from HTML, excluding script/style/noscript content.
+/// This prevents SPA shells with massive inline JS from passing the quality check.
+fn extract_visible_text_len(html: &str) -> usize {
+    use scraper::{Html, Selector};
+
+    let document = Html::parse_document(html);
+
+    // Select the body, fall back to root
+    let body_selector = Selector::parse("body").ok();
+    let root = body_selector
+        .as_ref()
+        .and_then(|s| document.select(s).next())
+        .unwrap_or_else(|| document.root_element());
+
+    let skip_selector = Selector::parse("script, style, noscript").ok();
+    let skip_ids: std::collections::HashSet<_> = skip_selector
+        .as_ref()
+        .map(|s| {
+            document
+                .select(s)
+                .map(|el| el.id())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut text = String::new();
+    for node in root.descendants() {
+        if let Some(el) = node.value().as_element() {
+            if skip_ids.contains(&node.id()) || matches!(el.name(), "script" | "style" | "noscript") {
+                continue;
+            }
+        }
+        if let Some(t) = node.value().as_text() {
+            // Skip text nodes that are children of script/style
+            let mut parent = node.parent();
+            let mut in_skip = false;
+            while let Some(p) = parent {
+                if let Some(el) = p.value().as_element() {
+                    if matches!(el.name(), "script" | "style" | "noscript") {
+                        in_skip = true;
+                        break;
+                    }
+                }
+                parent = p.parent();
+            }
+            if !in_skip {
+                text.push_str(t);
+            }
+        }
+    }
+
+    text.trim().len()
 }
 
 #[cfg(test)]

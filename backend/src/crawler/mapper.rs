@@ -2,6 +2,7 @@ use crate::{
     crawler::sitemap,
     error::{Result, ScrapeError},
     types::MapRequest,
+    utils::etld::extract_etld_plus_one_from_host,
 };
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -22,8 +23,11 @@ pub async fn discover_urls(url: &str, options: &MapRequest) -> Result<Vec<String
     let mut all_urls = HashSet::new();
 
     // 1. Try sitemap discovery first (unless explicitly ignored)
+    // Use the site root (scheme + host) for sitemap discovery, since sitemaps
+    // live at the domain root, not under arbitrary paths.
+    let site_root = format!("{}://{}", base_url.scheme(), base_url.host_str().unwrap_or(""));
     if !options.ignore_sitemap.unwrap_or(false) {
-        match sitemap::fetch_sitemap(url, &client).await {
+        match sitemap::fetch_sitemap(&site_root, &client).await {
             Ok(sitemap_urls) => {
                 if !sitemap_urls.is_empty() {
                     tracing::info!("Found {} URLs from sitemap for {}", sitemap_urls.len(), url);
@@ -47,6 +51,12 @@ pub async fn discover_urls(url: &str, options: &MapRequest) -> Result<Vec<String
         }
     })?;
 
+    // Use the final URL after redirects to resolve relative links correctly.
+    // e.g., docs.anthropic.com → platform.claude.com/docs/ means relative hrefs
+    // should be resolved against platform.claude.com, not docs.anthropic.com.
+    let final_url = response.url().clone();
+    tracing::debug!("Final URL after redirects: {}", final_url);
+
     let html_content = response
         .text()
         .await
@@ -57,11 +67,14 @@ pub async fn discover_urls(url: &str, options: &MapRequest) -> Result<Vec<String
     let link_selector = Selector::parse("a[href]")
         .map_err(|e| ScrapeError::Internal(format!("Invalid selector: {:?}", e)))?;
 
+    // Use both the original base_url and the final_url for domain filtering
+    let filter_base = &final_url;
+
     let mut in_page_links = 0;
     for element in document.select(&link_selector) {
         if let Some(href) = element.value().attr("href") {
-            // Resolve relative URLs
-            if let Ok(absolute_url) = base_url.join(href) {
+            // Resolve relative URLs against the final (post-redirect) URL
+            if let Ok(absolute_url) = final_url.join(href) {
                 let url_str = absolute_url.to_string();
 
                 // Filter by subdomain option
@@ -69,7 +82,7 @@ pub async fn discover_urls(url: &str, options: &MapRequest) -> Result<Vec<String
                     if !include_subdomains {
                         // Only include URLs from the same domain (no subdomains)
                         if let (Some(base_host), Some(url_host)) =
-                            (base_url.host_str(), absolute_url.host_str())
+                            (filter_base.host_str(), absolute_url.host_str())
                         {
                             if base_host != url_host {
                                 continue;
@@ -78,10 +91,10 @@ pub async fn discover_urls(url: &str, options: &MapRequest) -> Result<Vec<String
                     } else {
                         // Include subdomains - check if it's the same base domain
                         if let (Some(base_host), Some(url_host)) =
-                            (base_url.host_str(), absolute_url.host_str())
+                            (filter_base.host_str(), absolute_url.host_str())
                         {
-                            let base_domain = extract_base_domain(base_host);
-                            let url_domain = extract_base_domain(url_host);
+                            let base_domain = extract_etld_plus_one_from_host(base_host);
+                            let url_domain = extract_etld_plus_one_from_host(url_host);
                             if base_domain != url_domain {
                                 continue;
                             }
@@ -125,26 +138,35 @@ pub async fn discover_urls(url: &str, options: &MapRequest) -> Result<Vec<String
     Ok(filtered_urls)
 }
 
-/// Extract base domain from host (e.g., "blog.example.com" -> "example.com")
-fn extract_base_domain(host: &str) -> &str {
-    let parts: Vec<&str> = host.split('.').collect();
-    if parts.len() >= 2 {
-        &host[host.len() - parts[parts.len() - 2].len() - parts[parts.len() - 1].len() - 1..]
-    } else {
-        host
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_base_domain() {
-        assert_eq!(extract_base_domain("example.com"), "example.com");
-        assert_eq!(extract_base_domain("blog.example.com"), "example.com");
-        assert_eq!(extract_base_domain("api.blog.example.com"), "example.com");
-        assert_eq!(extract_base_domain("localhost"), "localhost");
+    fn test_etld_plus_one_co_uk_subdomain_matching() {
+        // .co.uk is a multi-part public suffix; subdomains of the same
+        // registrable domain should match each other.
+        let base = extract_etld_plus_one_from_host("www.example.co.uk");
+        let sub = extract_etld_plus_one_from_host("api.example.co.uk");
+        assert_eq!(base, sub, "subdomains of example.co.uk should share the same eTLD+1");
+        assert_eq!(base, "example.co.uk");
+    }
+
+    #[test]
+    fn test_etld_plus_one_github_io_isolation() {
+        // github.io is in the Public Suffix List, so user1.github.io and
+        // user2.github.io are *different* registrable domains.
+        let a = extract_etld_plus_one_from_host("user1.github.io");
+        let b = extract_etld_plus_one_from_host("user2.github.io");
+        assert_ne!(a, b, "different github.io subdomains must be isolated");
+    }
+
+    #[test]
+    fn test_etld_plus_one_basic() {
+        assert_eq!(extract_etld_plus_one_from_host("example.com"), "example.com");
+        assert_eq!(extract_etld_plus_one_from_host("blog.example.com"), "example.com");
+        assert_eq!(extract_etld_plus_one_from_host("api.blog.example.com"), "example.com");
+        assert_eq!(extract_etld_plus_one_from_host("localhost"), "localhost");
     }
 
     #[test]

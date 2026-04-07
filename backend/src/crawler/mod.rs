@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod crawler;
+pub mod dedup;
 pub mod filter;
 pub mod mapper;
 pub mod pagination;
@@ -13,6 +14,7 @@ pub mod streaming;
 pub mod url_normalization;
 
 pub use config::{CircuitBreaker, CrawlerConfig, MemoryMonitor};
+pub use dedup::ContentDeduplicator;
 pub use crawler::crawl_website;
 pub use filter::matches_pattern;
 pub use mapper::discover_urls;

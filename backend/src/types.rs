@@ -409,6 +409,11 @@ pub struct CrawlRequest {
     /// Use parallel crawler for better performance (default: false)
     #[serde(default)]
     pub use_parallel: Option<bool>,
+
+    /// Engine to use: "auto" | "http" | "browser" (default: "http").
+    /// "auto" tries HTTP first, falls back to browser for JS-heavy pages.
+    #[serde(default)]
+    pub engine: Option<String>,
 }
 
 /// Crawl response
@@ -555,6 +560,121 @@ impl SearchResponse {
         Self {
             success: false,
             data: None,
+            error: Some(error),
+        }
+    }
+}
+
+// ===== LLMs.txt Types =====
+
+/// Request for generating llms.txt and llms-full.txt
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmsTxtRequest {
+    /// Required: Website URL to generate llms.txt for
+    pub url: String,
+
+    /// Maximum number of URLs to process (default: 20, max: 500)
+    #[serde(default = "default_llmstxt_max_urls")]
+    pub max_urls: u32,
+
+    /// OpenAI-compatible LLM API base URL for generating descriptions.
+    /// If not provided, page metadata descriptions are used instead.
+    #[serde(default)]
+    pub llm_base_url: Option<String>,
+
+    /// LLM model name (default: "gpt-4o-mini")
+    #[serde(default)]
+    pub llm_model: Option<String>,
+
+    /// API key for the LLM service
+    #[serde(default)]
+    pub llm_api_key: Option<String>,
+
+    /// Maximum concurrent scrape requests (default: 10)
+    #[serde(default = "default_llmstxt_concurrency")]
+    pub max_concurrent_scrapes: u32,
+
+    /// Whether to also generate llms-full.txt content (default: true)
+    #[serde(default = "default_true")]
+    pub show_full_text: bool,
+
+    /// Skip sitemap.xml during URL discovery
+    #[serde(default)]
+    pub ignore_sitemap: Option<bool>,
+
+    /// Include subdomains in URL discovery (default: true)
+    #[serde(default = "default_include_subdomains")]
+    pub include_subdomains: Option<bool>,
+
+    /// Engine to use: "auto" | "http" | "browser" (default: "auto").
+    /// "auto" tries HTTP first, falls back to browser for JS-heavy pages.
+    #[serde(default = "default_auto_engine")]
+    pub engine: String,
+}
+
+fn default_auto_engine() -> String {
+    "auto".to_string()
+}
+
+fn default_llmstxt_max_urls() -> u32 {
+    20
+}
+
+fn default_llmstxt_concurrency() -> u32 {
+    10
+}
+
+/// Response containing generated llms.txt content
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmsTxtResponse {
+    pub success: bool,
+
+    /// The llms.txt index content
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub llmstxt: Option<String>,
+
+    /// The llms-full.txt content with full page markdown
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub llms_fulltxt: Option<String>,
+
+    /// Number of URLs successfully processed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub urls_processed: Option<usize>,
+
+    /// Total number of URLs discovered
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub urls_total: Option<usize>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl LlmsTxtResponse {
+    pub fn success(
+        llmstxt: String,
+        llms_fulltxt: Option<String>,
+        urls_processed: usize,
+        urls_total: usize,
+    ) -> Self {
+        Self {
+            success: true,
+            llmstxt: Some(llmstxt),
+            llms_fulltxt: llms_fulltxt,
+            urls_processed: Some(urls_processed),
+            urls_total: Some(urls_total),
+            error: None,
+        }
+    }
+
+    pub fn error(error: String) -> Self {
+        Self {
+            success: false,
+            llmstxt: None,
+            llms_fulltxt: None,
+            urls_processed: None,
+            urls_total: None,
             error: Some(error),
         }
     }

@@ -125,4 +125,11 @@ impl IntoResponse for ScrapeError {
     }
 }
 
+impl ScrapeError {
+    /// Returns true if this error is transient and the operation should be retried.
+    pub fn is_transient(&self) -> bool {
+        matches!(self, ScrapeError::Timeout | ScrapeError::RequestFailed(_))
+    }
+}
+
 pub type Result<T> = std::result::Result<T, ScrapeError>;

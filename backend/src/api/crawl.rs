@@ -181,6 +181,7 @@ mod tests {
             detect_pagination: None,
             max_pagination_pages: None,
             use_parallel: None,
+            engine: None,
         };
 
         let result = crawl_handler(Json(request)).await;
@@ -201,6 +202,7 @@ mod tests {
             detect_pagination: None,
             max_pagination_pages: None,
             use_parallel: None,
+            engine: None,
         };
 
         let result = crawl_stream_handler(Json(request)).await;

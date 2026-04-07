@@ -34,6 +34,10 @@ pub struct CrawlerConfig {
     /// Enable circuit breaker (default: true)
     #[serde(default = "default_true")]
     pub enable_circuit_breaker: bool,
+
+    /// Per-page scrape timeout in seconds (default: 30)
+    #[serde(default = "default_scrape_timeout_secs")]
+    pub scrape_timeout_secs: u64,
 }
 
 impl Default for CrawlerConfig {
@@ -46,8 +50,13 @@ impl Default for CrawlerConfig {
             backpressure_threshold: default_backpressure_threshold(),
             enable_memory_monitoring: true,
             enable_circuit_breaker: true,
+            scrape_timeout_secs: default_scrape_timeout_secs(),
         }
     }
+}
+
+fn default_scrape_timeout_secs() -> u64 {
+    30
 }
 
 fn default_max_queue_size() -> usize {
@@ -126,11 +135,7 @@ impl CircuitBreaker {
     }
 }
 
-/// Memory monitor for tracking process memory usage
-///
-/// This is a lightweight implementation that tracks an estimated memory budget
-/// without requiring the `sysinfo` crate. In production, you may want to
-/// integrate with platform-specific memory APIs.
+/// Memory monitor for tracking process memory usage via `getrusage`.
 pub struct MemoryMonitor {
     max_memory_mb: usize,
     enabled: bool,
@@ -144,31 +149,76 @@ impl MemoryMonitor {
         }
     }
 
-    /// Check if current memory usage exceeds the limit
-    ///
-    /// This is a lightweight check. For precise memory monitoring,
-    /// consider enabling platform-specific memory tracking.
+    /// Check if current memory usage exceeds the limit.
     pub fn check_memory_limit(&self) -> Result<()> {
         if !self.enabled {
             return Ok(());
         }
 
-        // Lightweight heuristic: we don't block on memory by default.
-        // The actual enforcement happens through queue size limits and
-        // concurrency controls in the crawler config.
-        debug!("Memory check: limit is {}MB (lightweight mode)", self.max_memory_mb);
+        let current = self.get_current_memory_mb();
+        if current > 0 && current as usize > self.max_memory_mb {
+            warn!(
+                "Memory limit exceeded: {}MB > {}MB",
+                current, self.max_memory_mb
+            );
+            return Err(crate::error::ScrapeError::ResourceLimit(format!(
+                "Memory usage {}MB exceeds limit {}MB",
+                current, self.max_memory_mb
+            )));
+        }
+
+        debug!(
+            "Memory check: {}MB / {}MB",
+            current, self.max_memory_mb
+        );
         Ok(())
     }
 
-    /// Get current memory usage in MB (returns 0 in lightweight mode)
+    /// Get current resident memory usage in MB using `getrusage`.
+    /// Returns 0 when monitoring is disabled.
     pub fn get_current_memory_mb(&self) -> u64 {
-        0
+        if !self.enabled {
+            return 0;
+        }
+        get_resident_memory_mb()
     }
 
-    /// Get memory usage percentage (returns 0.0 in lightweight mode)
+    /// Get memory usage as a percentage of the configured limit.
+    /// Returns 0.0 when monitoring is disabled.
     pub fn get_memory_percentage(&self) -> f64 {
-        0.0
+        if !self.enabled || self.max_memory_mb == 0 {
+            return 0.0;
+        }
+        let current = self.get_current_memory_mb() as f64;
+        (current / self.max_memory_mb as f64) * 100.0
     }
+}
+
+/// Get the process's max resident set size in MB.
+///
+/// Uses `libc::getrusage(RUSAGE_SELF)` on Unix.
+/// Returns 0 on non-Unix platforms.
+#[cfg(unix)]
+fn get_resident_memory_mb() -> u64 {
+    unsafe {
+        let mut usage: libc::rusage = std::mem::zeroed();
+        if libc::getrusage(libc::RUSAGE_SELF, &mut usage) == 0 {
+            let rss = usage.ru_maxrss;
+            // macOS reports ru_maxrss in bytes, Linux in KB
+            if cfg!(target_os = "macos") {
+                (rss as u64) / (1024 * 1024)
+            } else {
+                (rss as u64) / 1024
+            }
+        } else {
+            0
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn get_resident_memory_mb() -> u64 {
+    0
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 use crate::error::ScrapeError;
-use crate::types::{CrawlRequest, MapRequest, ScrapeRequest, SearchRequest};
+use crate::types::{CrawlRequest, LlmsTxtRequest, MapRequest, ScrapeRequest, SearchRequest};
 use crate::utils::ssrf_protection;
 use scraper::Selector;
 use std::time::Duration;
@@ -192,6 +192,28 @@ pub fn validate_search_request(req: &SearchRequest) -> Result<(), ScrapeError> {
             "Search limit too large: {} > {}",
             req.limit, MAX_SEARCH_LIMIT
         )));
+    }
+
+    Ok(())
+}
+
+const MAX_LLMSTXT_URLS: u32 = 500;
+
+/// Validate llms.txt request
+pub async fn validate_llmstxt_request(req: &LlmsTxtRequest) -> Result<(), ScrapeError> {
+    validate_url(&req.url).await?;
+
+    if req.max_urls > MAX_LLMSTXT_URLS {
+        return Err(ScrapeError::InvalidRequest(format!(
+            "max_urls too large: {} > {}",
+            req.max_urls, MAX_LLMSTXT_URLS
+        )));
+    }
+
+    if req.max_concurrent_scrapes == 0 || req.max_concurrent_scrapes > 50 {
+        return Err(ScrapeError::InvalidRequest(
+            "max_concurrent_scrapes must be between 1 and 50".to_string(),
+        ));
     }
 
     Ok(())

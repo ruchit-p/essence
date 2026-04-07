@@ -13,6 +13,7 @@ fn test_queue_bounded_by_config() {
         backpressure_threshold: 80,
         enable_memory_monitoring: true,
         enable_circuit_breaker: true,
+        scrape_timeout_secs: 30,
     };
 
     // Verify config limits are set correctly

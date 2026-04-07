@@ -909,6 +909,7 @@ async fn test_pagination_detection() {
         detect_pagination: Some(true),
         max_pagination_pages: Some(50),
         use_parallel: None,
+        engine: None,
     };
 
     let result = crawl_website(&request).await;

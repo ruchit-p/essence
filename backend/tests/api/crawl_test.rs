@@ -37,6 +37,7 @@ async fn test_crawl_single_page() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -65,6 +66,7 @@ async fn test_crawl_with_depth() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -93,6 +95,7 @@ async fn test_crawl_with_limit() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -120,6 +123,7 @@ async fn test_crawl_with_exclude_paths() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -152,6 +156,7 @@ async fn test_crawl_with_include_paths() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -180,6 +185,7 @@ async fn test_crawl_no_external_links() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -212,6 +218,7 @@ async fn test_crawl_invalid_url() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -236,6 +243,7 @@ async fn test_crawl_empty_url() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -260,6 +268,7 @@ async fn test_crawl_deduplication() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -295,6 +304,7 @@ async fn test_crawl_depth_limiting() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;
@@ -322,6 +332,7 @@ async fn test_crawl_returns_documents_with_content() {
         detect_pagination: None,
         max_pagination_pages: None,
         use_parallel: None,
+        engine: None,
     };
 
     let (status, response) = crawl_request(&request).await;

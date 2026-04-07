@@ -1,5 +1,7 @@
 use crate::{
+    api::scrape::scrape_core_logic,
     crawler::config::{CircuitBreaker, CrawlerConfig, MemoryMonitor},
+    crawler::dedup::ContentDeduplicator,
     crawler::filter::{is_same_domain, should_crawl_url},
     crawler::pagination::{PaginationConfig, PaginationDetector},
     crawler::prioritizer::{PrioritizedUrl, UrlPrioritizer},
@@ -75,6 +77,9 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
         "Rate limiting enabled: {} requests/second per domain",
         rate_limit
     );
+
+    // Initialize content deduplicator
+    let mut content_dedup = ContentDeduplicator::new();
 
     // Priority-based crawl (BFS with intelligent ordering)
     while let Some(prioritized_url) = queue.pop() {
@@ -166,11 +171,54 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
             documents.len()
         );
 
-        match scrape_url(&current_url, &engine).await {
+        // Determine engine mode from request
+        let engine_mode = request.engine.as_deref().unwrap_or("http");
+
+        // Scrape with retry for transient errors
+        let mut scrape_result = scrape_url(&current_url, &engine, &config, engine_mode).await;
+        for retry in 0..2 {
+            if scrape_result.is_ok() || !scrape_result.as_ref().err().map_or(false, |e| e.is_transient()) {
+                break;
+            }
+            tracing::debug!("Retrying transient error for {} (attempt {})", current_url, retry + 2);
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            scrape_result = scrape_url(&current_url, &engine, &config, engine_mode).await;
+        }
+
+        match scrape_result {
             Ok((document, links, html)) => {
                 // Record success in circuit breaker
                 if config.enable_circuit_breaker {
                     circuit_breaker.record_success(&domain);
+                }
+
+                // Check for duplicate content before adding to results
+                if let Some(ref md) = document.markdown {
+                    if content_dedup.is_duplicate(md) {
+                        debug!("Skipping duplicate content: {}", current_url);
+                        // Still process links even for duplicate content
+                        // but don't add document to results
+                        if current_depth < request.max_depth {
+                            for link in links {
+                                let normalized_link = normalize_url(&link);
+                                if !visited.contains(&normalized_link)
+                                    && !url_depths.contains_key(&normalized_link)
+                                    && is_same_domain(&normalized_link, &normalized_base_url)
+                                {
+                                    if queue.len() < config.max_queue_size {
+                                        let prioritized_link = PrioritizedUrl::new(
+                                            normalized_link.clone(),
+                                            current_depth + 1,
+                                            &url_prioritizer,
+                                        );
+                                        queue.push(prioritized_link);
+                                        url_depths.insert(normalized_link, current_depth + 1);
+                                    }
+                                }
+                            }
+                        }
+                        continue;
+                    }
                 }
 
                 // Add document to results
@@ -298,6 +346,13 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
             Err(e) => {
                 warn!("Failed to scrape {}: {}", current_url, e);
 
+                // Handle 429 Too Many Requests
+                if let ScrapeError::RequestFailed(ref reqwest_err) = e {
+                    if reqwest_err.status().map_or(false, |s| s == reqwest::StatusCode::TOO_MANY_REQUESTS) {
+                        rate_limiter.throttle_domain(&current_url);
+                    }
+                }
+
                 // Record failure in circuit breaker
                 if config.enable_circuit_breaker {
                     circuit_breaker.record_failure(&domain);
@@ -341,7 +396,7 @@ async fn check_robots_txt(url: &str, ignore_sitemap: Option<bool>) -> bool {
 }
 
 /// Scrape a single URL and extract links
-async fn scrape_url(url: &str, engine: &HttpEngine) -> Result<(Document, Vec<String>, String)> {
+async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engine_mode: &str) -> Result<(Document, Vec<String>, String)> {
     // Create a scrape request
     let scrape_request = ScrapeRequest {
         url: url.to_string(),
@@ -350,7 +405,7 @@ async fn scrape_url(url: &str, engine: &HttpEngine) -> Result<(Document, Vec<Str
         include_tags: vec![],
         exclude_tags: vec![],
         only_main_content: true,
-        timeout: 30000,
+        timeout: config.scrape_timeout_secs * 1000,
         wait_for: 0,
         remove_base64_images: true,
         skip_tls_verification: false,
@@ -363,6 +418,49 @@ async fn scrape_url(url: &str, engine: &HttpEngine) -> Result<(Document, Vec<Str
 
     // Scrape the URL
     let raw_result = engine.scrape(&scrape_request).await?;
+
+    // Check if the HTTP result has thin content and we should try browser fallback
+    if engine_mode == "auto" {
+        let html_text_len = scraper::Html::parse_document(&raw_result.html)
+            .root_element().text().collect::<String>().trim().len();
+
+        if html_text_len < 100 {
+            debug!("Thin content detected ({} chars) for {}, trying browser fallback", html_text_len, url);
+
+            let fallback_request = ScrapeRequest {
+                url: url.to_string(),
+                formats: vec!["markdown".to_string(), "links".to_string()],
+                headers: HashMap::new(),
+                include_tags: vec![],
+                exclude_tags: vec![],
+                only_main_content: true,
+                timeout: 30000,
+                wait_for: 0,
+                remove_base64_images: true,
+                skip_tls_verification: false,
+                engine: "auto".to_string(),
+                wait_for_selector: None,
+                actions: vec![],
+                screenshot: false,
+                screenshot_format: "png".to_string(),
+            };
+
+            if let Ok(response) = scrape_core_logic(&fallback_request).await {
+                if let Some(doc) = response.data {
+                    let has_good_content = doc.markdown.as_ref()
+                        .map(|md| md.len() > 100)
+                        .unwrap_or(false);
+
+                    if has_good_content {
+                        debug!("Browser fallback produced better content for {}", url);
+                        let fallback_links = doc.links.clone().unwrap_or_default();
+                        let html = raw_result.html.clone();
+                        return Ok((doc, fallback_links, html));
+                    }
+                }
+            }
+        }
+    }
 
     // Extract links from HTML
     let links = extract_links(&raw_result.html, url)?;

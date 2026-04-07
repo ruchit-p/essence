@@ -1,5 +1,7 @@
 use crate::{
+    api::scrape::scrape_core_logic,
     crawler::config::{CircuitBreaker, CrawlerConfig, MemoryMonitor},
+    crawler::dedup::ContentDeduplicator,
     crawler::filter::{is_same_domain, should_crawl_url},
     crawler::pagination::{PaginationConfig, PaginationDetector},
     crawler::rate_limiter::DomainRateLimiter,
@@ -7,7 +9,8 @@ use crate::{
     error::{Result, ScrapeError},
     format,
     types::{CrawlRequest, Document, ScrapeRequest},
-    utils::{normalize_url_string, robots},
+    crawler::url_normalization::normalize_url,
+    utils::robots,
 };
 use scraper::{Html, Selector};
 use std::collections::{HashMap, HashSet};
@@ -61,8 +64,7 @@ impl ParallelCrawler {
             .map_err(|e| ScrapeError::InvalidUrl(format!("Invalid base URL: {}", e)))?;
 
         // Normalize the base URL to prevent duplicates
-        let normalized_base_url = normalize_url_string(&request.url)
-            .map_err(|e| ScrapeError::InvalidUrl(format!("Failed to normalize base URL: {}", e)))?;
+        let normalized_base_url = normalize_url(&request.url);
 
         // Initialize crawler config with bounds
         let config = CrawlerConfig::default();
@@ -104,6 +106,9 @@ impl ParallelCrawler {
         )));
         let detect_pagination = request.detect_pagination.unwrap_or(true);
 
+        // Initialize content deduplicator
+        let content_dedup = Arc::new(tokio::sync::Mutex::new(ContentDeduplicator::new()));
+
         // Channels for communication
         // Buffer size matches queue size to prevent unbounded growth
         let (url_tx, url_rx) = mpsc::channel::<(String, u32)>(config.max_queue_size);
@@ -136,6 +141,7 @@ impl ParallelCrawler {
             let rate_limiter_clone = Arc::clone(&rate_limiter);
             let scrape_semaphore_clone = Arc::clone(&self.scrape_semaphore);
             let pagination_detector_clone = Arc::clone(&pagination_detector);
+            let content_dedup_clone = Arc::clone(&content_dedup);
             let config_clone = config.clone();
             let request_clone2 = request_clone.clone();
 
@@ -152,6 +158,7 @@ impl ParallelCrawler {
                     rate_limiter_clone,
                     scrape_semaphore_clone,
                     pagination_detector_clone,
+                    content_dedup_clone,
                     config_clone,
                     request_clone2,
                     robots_allowed,
@@ -220,6 +227,7 @@ impl ParallelCrawler {
         rate_limiter: Arc<DomainRateLimiter>,
         scrape_semaphore: Arc<Semaphore>,
         pagination_detector: Arc<tokio::sync::Mutex<PaginationDetector>>,
+        content_dedup: Arc<tokio::sync::Mutex<ContentDeduplicator>>,
         config: CrawlerConfig,
         request: CrawlRequest,
         robots_allowed: bool,
@@ -244,21 +252,12 @@ impl ParallelCrawler {
                 }
             };
 
-            // Check if already visited
-            {
-                let visited_read = visited.read().await;
-                if visited_read.contains(&current_url) {
-                    continue;
-                }
-            }
-
-            // Mark as visited
+            // Check and mark as visited atomically
             {
                 let mut visited_write = visited.write().await;
-                if visited_write.contains(&current_url) {
+                if !visited_write.insert(current_url.clone()) {
                     continue;
                 }
-                visited_write.insert(current_url.clone());
             }
 
             // Check depth limit
@@ -330,16 +329,74 @@ impl ParallelCrawler {
                 worker_id, current_url, current_depth
             );
 
-            let scrape_result = timeout(
-                Duration::from_secs(30),
-                scrape_url(&current_url, &engine)
+            // Determine engine mode from request
+            let engine_mode = request.engine.as_deref().unwrap_or("http");
+
+            // Scrape with retry for transient errors
+            let mut scrape_result = timeout(
+                Duration::from_secs(config.scrape_timeout_secs),
+                scrape_url(&current_url, &engine, &config, engine_mode)
             ).await;
+            for retry in 0..2 {
+                let should_retry = match &scrape_result {
+                    Ok(Err(e)) => e.is_transient(),
+                    Err(_) => true, // timeout is transient
+                    Ok(Ok(_)) => false,
+                };
+                if !should_retry {
+                    break;
+                }
+                tracing::debug!("Worker {}: Retrying transient error for {} (attempt {})", worker_id, current_url, retry + 2);
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                scrape_result = timeout(
+                    Duration::from_secs(config.scrape_timeout_secs),
+                    scrape_url(&current_url, &engine, &config, engine_mode)
+                ).await;
+            }
 
             match scrape_result {
                 Ok(Ok((document, links, html))) => {
                     // Record success in circuit breaker
                     if config.enable_circuit_breaker {
                         circuit_breaker.record_success(&domain);
+                    }
+
+                    // Check for duplicate content before sending
+                    {
+                        let mut dedup = content_dedup.lock().await;
+                        if let Some(ref md) = document.markdown {
+                            if dedup.is_duplicate(md) {
+                                debug!("Worker {}: Skipping duplicate content: {}", worker_id, current_url);
+                                // Still process links below but skip sending the document
+                                // Process discovered links if we haven't reached max depth
+                                if current_depth < request.max_depth {
+                                    for link in links {
+                                        let normalized_link = normalize_url(&link);
+                                        {
+                                            let visited_read = visited.read().await;
+                                            let depths_read = url_depths.read().await;
+                                            if visited_read.contains(&normalized_link) || depths_read.contains_key(&normalized_link) {
+                                                continue;
+                                            }
+                                        }
+                                        if is_same_domain(&normalized_link, &request.url) {
+                                            {
+                                                let mut depths_write = url_depths.write().await;
+                                                if depths_write.len() < config.max_queue_size {
+                                                    depths_write.insert(normalized_link.clone(), current_depth + 1);
+                                                } else {
+                                                    continue;
+                                                }
+                                            }
+                                            if url_tx.send((normalized_link, current_depth + 1)).await.is_err() {
+                                                return Ok(());
+                                            }
+                                        }
+                                    }
+                                }
+                                continue;
+                            }
+                        }
                     }
 
                     // Send document to collector
@@ -360,13 +417,7 @@ impl ParallelCrawler {
 
                         // Add pagination links with priority (same depth as current)
                         for link in &pagination_links {
-                            let normalized_link = match normalize_url_string(link) {
-                                Ok(url) => url,
-                                Err(e) => {
-                                    debug!("Worker {}: Failed to normalize pagination link {}: {}", worker_id, link, e);
-                                    continue;
-                                }
-                            };
+                            let normalized_link = normalize_url(link);
 
                             // Skip if already visited or queued
                             {
@@ -395,13 +446,7 @@ impl ParallelCrawler {
                         // Then process regular links
                         for link in links {
                             // Normalize the link to prevent duplicates
-                            let normalized_link = match normalize_url_string(&link) {
-                                Ok(url) => url,
-                                Err(e) => {
-                                    debug!("Worker {}: Failed to normalize link {}: {}", worker_id, link, e);
-                                    continue;
-                                }
-                            };
+                            let normalized_link = normalize_url(&link);
 
                             // Skip if already visited or queued
                             {
@@ -452,6 +497,13 @@ impl ParallelCrawler {
                 Ok(Err(e)) => {
                     warn!("Worker {}: Failed to scrape {}: {}", worker_id, current_url, e);
 
+                    // Handle 429 Too Many Requests
+                    if let ScrapeError::RequestFailed(ref reqwest_err) = e {
+                        if reqwest_err.status().map_or(false, |s| s == reqwest::StatusCode::TOO_MANY_REQUESTS) {
+                            rate_limiter.throttle_domain(&current_url);
+                        }
+                    }
+
                     // Record failure in circuit breaker
                     if config.enable_circuit_breaker {
                         circuit_breaker.record_failure(&domain);
@@ -495,7 +547,7 @@ async fn check_robots_txt(url: &str, ignore_sitemap: Option<bool>) -> bool {
 }
 
 /// Scrape a single URL and extract links
-async fn scrape_url(url: &str, engine: &HttpEngine) -> Result<(Document, Vec<String>, String)> {
+async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engine_mode: &str) -> Result<(Document, Vec<String>, String)> {
     // Create a scrape request
     let scrape_request = ScrapeRequest {
         url: url.to_string(),
@@ -504,7 +556,7 @@ async fn scrape_url(url: &str, engine: &HttpEngine) -> Result<(Document, Vec<Str
         include_tags: vec![],
         exclude_tags: vec![],
         only_main_content: true,
-        timeout: 30000,
+        timeout: config.scrape_timeout_secs * 1000,
         wait_for: 0,
         remove_base64_images: true,
         skip_tls_verification: false,
@@ -517,6 +569,49 @@ async fn scrape_url(url: &str, engine: &HttpEngine) -> Result<(Document, Vec<Str
 
     // Scrape the URL
     let raw_result = engine.scrape(&scrape_request).await?;
+
+    // Check if the HTTP result has thin content and we should try browser fallback
+    if engine_mode == "auto" {
+        let html_text_len = scraper::Html::parse_document(&raw_result.html)
+            .root_element().text().collect::<String>().trim().len();
+
+        if html_text_len < 100 {
+            debug!("Thin content detected ({} chars) for {}, trying browser fallback", html_text_len, url);
+
+            let fallback_request = ScrapeRequest {
+                url: url.to_string(),
+                formats: vec!["markdown".to_string(), "links".to_string()],
+                headers: HashMap::new(),
+                include_tags: vec![],
+                exclude_tags: vec![],
+                only_main_content: true,
+                timeout: 30000,
+                wait_for: 0,
+                remove_base64_images: true,
+                skip_tls_verification: false,
+                engine: "auto".to_string(),
+                wait_for_selector: None,
+                actions: vec![],
+                screenshot: false,
+                screenshot_format: "png".to_string(),
+            };
+
+            if let Ok(response) = scrape_core_logic(&fallback_request).await {
+                if let Some(doc) = response.data {
+                    let has_good_content = doc.markdown.as_ref()
+                        .map(|md| md.len() > 100)
+                        .unwrap_or(false);
+
+                    if has_good_content {
+                        debug!("Browser fallback produced better content for {}", url);
+                        let fallback_links = doc.links.clone().unwrap_or_default();
+                        let html = raw_result.html.clone();
+                        return Ok((doc, fallback_links, html));
+                    }
+                }
+            }
+        }
+    }
 
     // Extract links from HTML
     let links = extract_links(&raw_result.html, url)?;
@@ -592,8 +687,20 @@ fn is_forward_link(link: &str, current: &str) -> bool {
 
     // A link is forward if:
     // 1. It has the same path as current, or
-    // 2. It's a subpath of current (starts with current path)
-    link_path == current_path || link_path.starts_with(current_path)
+    // 2. It's a subpath of current (starts with current path + '/')
+    if link_path == current_path {
+        return true;
+    }
+
+    // Ensure we're checking path boundaries, not just string prefixes
+    // /news/articles should match /news, but /newsletter should NOT match /news
+    let current_with_slash = if current_path.ends_with('/') {
+        current_path.to_string()
+    } else {
+        format!("{}/", current_path)
+    };
+
+    link_path.starts_with(&current_with_slash)
 }
 
 #[cfg(test)]
@@ -655,6 +762,12 @@ mod tests {
         assert!(!is_forward_link(
             "https://example.com/about",
             "https://example.com/blog"
+        ));
+
+        // NOT forward: path boundary check
+        assert!(!is_forward_link(
+            "https://example.com/newsletter",
+            "https://example.com/news"
         ));
     }
 }

@@ -66,6 +66,14 @@ impl DomainRateLimiter {
             .ok_or_else(|| "No host in URL".to_string())
     }
 
+    /// Throttle a domain to 1 req/sec (called on 429 Too Many Requests)
+    pub fn throttle_domain(&self, url: &str) {
+        if let Ok(domain) = Self::extract_domain(url) {
+            self.set_domain_rate(&domain, 1);
+            tracing::warn!("Throttled domain {} to 1 req/sec due to rate limiting", domain);
+        }
+    }
+
     /// Set custom rate for specific domain
     pub fn set_domain_rate(&self, domain: &str, requests_per_second: u32) {
         let quota = Quota::per_second(

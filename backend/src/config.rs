@@ -26,6 +26,9 @@ pub struct BrowserSettings {
 pub struct EngineSettings {
     pub waterfall_enabled: bool,
     pub waterfall_delay_ms: u64,
+    /// Shorter waterfall delay for batch operations (crawl, llmstxt).
+    /// Default: 1000ms. Keeps batch scraping fast while still falling back to browser.
+    pub batch_waterfall_delay_ms: u64,
     pub auto_fallback_on_block: bool,
 }
 
@@ -68,6 +71,7 @@ impl Settings {
             engine: EngineSettings {
                 waterfall_enabled: env_or("ENGINE_WATERFALL_ENABLED", true),
                 waterfall_delay_ms: env_or("ENGINE_WATERFALL_DELAY_MS", 5000),
+                batch_waterfall_delay_ms: env_or("ENGINE_BATCH_WATERFALL_DELAY_MS", 1000),
                 auto_fallback_on_block: env_or("ESSENCE_ENGINE_AUTO_FALLBACK_ON_BLOCK", true),
             },
             crawler: CrawlerSettings {

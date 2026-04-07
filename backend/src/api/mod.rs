@@ -1,4 +1,5 @@
 pub mod crawl;
+pub mod llmstxt;
 pub mod map;
 pub mod scrape;
 pub mod search;
@@ -13,6 +14,7 @@ pub fn create_router() -> Router {
         .route("/api/v1/crawl", post(crawl::crawl_handler))
         .route("/api/v1/crawl/stream", post(crawl::crawl_stream_handler))
         .route("/api/v1/search", post(search::search_handler))
+        .route("/api/v1/llmstxt", post(llmstxt::llmstxt_handler))
         .route("/health", get(health_handler))
 }
 

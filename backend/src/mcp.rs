@@ -16,11 +16,11 @@ use serde::Deserialize;
 use tracing::{error, info};
 
 use crate::{
-    api::scrape::scrape_core_logic,
+    api::{llmstxt::llmstxt_core_logic, scrape::scrape_core_logic},
     crawler::{crawl_website, mapper},
     search::SearchProvider,
     types::{
-        CrawlRequest, MapRequest, ScrapeRequest,
+        CrawlRequest, LlmsTxtRequest, MapRequest, ScrapeRequest,
     },
 };
 
@@ -101,6 +101,11 @@ pub struct CrawlParams {
     /// Allow following external links.
     #[serde(default)]
     pub allow_external_links: Option<bool>,
+
+    /// Rendering engine: "auto", "http", or "browser". Defaults to "http".
+    /// "auto" tries HTTP first, falls back to browser for JS-heavy pages.
+    #[serde(default)]
+    pub engine: Option<String>,
 }
 
 /// Parameters for the `search` tool.
@@ -116,6 +121,39 @@ pub struct SearchParams {
     /// Whether to scrape the content of each result URL. Defaults to false.
     #[serde(default)]
     pub scrape_results: Option<bool>,
+}
+
+/// Parameters for the `llmstxt` tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct LlmsTxtParams {
+    /// The website URL to generate llms.txt for.
+    pub url: String,
+
+    /// Maximum number of URLs to process. Defaults to 20.
+    #[serde(default)]
+    pub max_urls: Option<u32>,
+
+    /// OpenAI-compatible LLM API base URL for generating descriptions.
+    /// If not provided, page metadata descriptions are used.
+    #[serde(default)]
+    pub llm_base_url: Option<String>,
+
+    /// LLM model name (e.g. "gpt-4o-mini"). Only used if llm_base_url is set.
+    #[serde(default)]
+    pub llm_model: Option<String>,
+
+    /// API key for the LLM service. Only used if llm_base_url is set.
+    #[serde(default)]
+    pub llm_api_key: Option<String>,
+
+    /// Whether to include full page content (llms-full.txt). Defaults to true.
+    #[serde(default)]
+    pub show_full_text: Option<bool>,
+
+    /// Rendering engine: "auto", "http", or "browser". Defaults to "auto".
+    /// "auto" tries HTTP first, falls back to browser for JS-heavy pages.
+    #[serde(default)]
+    pub engine: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -237,6 +275,7 @@ impl EssenceMcpServer {
             detect_pagination: Some(true),
             max_pagination_pages: Some(50),
             use_parallel: None,
+            engine: params.engine,
         };
 
         match crawl_website(&crawl_request).await {
@@ -329,6 +368,50 @@ impl EssenceMcpServer {
         })?;
         Ok(CallToolResult::success(vec![Content::text(json)]))
     }
+
+    /// Generate llms.txt and llms-full.txt files from a documentation website.
+    ///
+    /// Discovers URLs, scrapes each page, and builds structured text files
+    /// optimized for LLM consumption.
+    #[tool(description = "Generate llms.txt and llms-full.txt from a website. Discovers URLs via sitemaps/links, scrapes each page, and produces structured index + full-text files for LLM consumption. Optionally uses an OpenAI-compatible API to generate concise page descriptions.")]
+    async fn llmstxt(
+        &self,
+        Parameters(params): Parameters<LlmsTxtParams>,
+    ) -> Result<CallToolResult, McpError> {
+        info!("MCP tool call: llmstxt url={}", params.url);
+
+        let request = LlmsTxtRequest {
+            url: params.url.clone(),
+            max_urls: params.max_urls.unwrap_or(20),
+            llm_base_url: params.llm_base_url,
+            llm_model: params.llm_model,
+            llm_api_key: params.llm_api_key,
+            max_concurrent_scrapes: 10,
+            show_full_text: params.show_full_text.unwrap_or(true),
+            ignore_sitemap: None,
+            include_subdomains: Some(true),
+            engine: params.engine.unwrap_or_else(|| "auto".to_string()),
+        };
+
+        match llmstxt_core_logic(&request).await {
+            Ok(response) => {
+                let json = serde_json::to_string_pretty(&response).map_err(|e| {
+                    McpError::internal_error(
+                        format!("Failed to serialize llmstxt response: {}", e),
+                        None,
+                    )
+                })?;
+                Ok(CallToolResult::success(vec![Content::text(json)]))
+            }
+            Err(e) => {
+                error!("MCP llmstxt error for {}: {}", params.url, e);
+                Ok(CallToolResult::error(vec![Content::text(format!(
+                    "llms.txt generation failed: {}",
+                    e
+                ))]))
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -357,9 +440,10 @@ impl ServerHandler for EssenceMcpServer {
                 .build(),
             instructions: Some(
                 "Essence is a web retrieval engine. Use the 'scrape' tool to fetch a single page, \
-                 'map' to discover URLs on a site, 'crawl' to traverse multiple pages, or 'search' \
-                 to find pages via DuckDuckGo web search. All tools return structured JSON with \
-                 Markdown content suitable for LLM consumption."
+                 'map' to discover URLs on a site, 'crawl' to traverse multiple pages, 'search' \
+                 to find pages via DuckDuckGo web search, or 'llmstxt' to generate llms.txt and \
+                 llms-full.txt files from a documentation website. All tools return structured JSON \
+                 with Markdown content suitable for LLM consumption."
                     .to_string(),
             ),
             ..Default::default()
