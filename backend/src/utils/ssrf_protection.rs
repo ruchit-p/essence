@@ -1,6 +1,6 @@
+use crate::error::{Result, ScrapeError};
 use std::net::{IpAddr, Ipv6Addr};
 use url::Url;
-use crate::error::{Result, ScrapeError};
 
 /// Check if an IP address is private/internal
 pub fn is_private_ip(ip: &IpAddr) -> bool {
@@ -11,13 +11,13 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
             || ipv4.is_link_local()     // 169.254.0.0/16
             || ipv4.is_documentation()  // 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24
             || ipv4.is_broadcast()      // 255.255.255.255
-            || ipv4.octets()[0] == 0    // 0.0.0.0/8 (reserved)
+            || ipv4.octets()[0] == 0 // 0.0.0.0/8 (reserved)
         }
         IpAddr::V6(ipv6) => {
             ipv6.is_loopback()          // ::1
             || ipv6.is_unspecified()    // ::
             || is_ipv6_unique_local(ipv6)  // fc00::/7
-            || is_ipv6_link_local(ipv6)    // fe80::/10
+            || is_ipv6_link_local(ipv6) // fe80::/10
         }
     }
 }
@@ -33,35 +33,36 @@ fn is_ipv6_link_local(ipv6: &Ipv6Addr) -> bool {
 /// Common internal hostnames that should be blocked
 const BLOCKED_HOSTNAMES: &[&str] = &[
     "localhost",
-    "metadata.google.internal",  // GCP metadata
-    "169.254.169.254",            // AWS metadata IP
+    "metadata.google.internal", // GCP metadata
+    "169.254.169.254",          // AWS metadata IP
     "metadata",
-    "instance-data",              // AWS instance data
-    "consul",                     // Consul service discovery
-    "vault",                      // HashiCorp Vault
+    "instance-data", // AWS instance data
+    "consul",        // Consul service discovery
+    "vault",         // HashiCorp Vault
 ];
 
 /// Check if hostname is in blocklist
 pub fn is_blocked_hostname(hostname: &str) -> bool {
     let lower = hostname.to_lowercase();
-    BLOCKED_HOSTNAMES.iter().any(|&blocked| {
-        lower == blocked || lower.ends_with(&format!(".{}", blocked))
-    })
+    BLOCKED_HOSTNAMES
+        .iter()
+        .any(|&blocked| lower == blocked || lower.ends_with(&format!(".{}", blocked)))
 }
 
 /// Validate URL and check for SSRF vulnerabilities
 pub async fn validate_url_safe(url: &str) -> Result<()> {
     // Parse URL
-    let parsed = Url::parse(url)
-        .map_err(|e| ScrapeError::InvalidUrl(format!("Invalid URL: {}", e)))?;
+    let parsed =
+        Url::parse(url).map_err(|e| ScrapeError::InvalidUrl(format!("Invalid URL: {}", e)))?;
 
     // Only allow http/https
     match parsed.scheme() {
         "http" | "https" => {}
         scheme => {
-            return Err(ScrapeError::InvalidUrl(
-                format!("Unsupported scheme: {}. Only http/https allowed.", scheme)
-            ));
+            return Err(ScrapeError::InvalidUrl(format!(
+                "Unsupported scheme: {}. Only http/https allowed.",
+                scheme
+            )));
         }
     }
 
@@ -69,17 +70,19 @@ pub async fn validate_url_safe(url: &str) -> Result<()> {
     if let Some(host) = parsed.host_str() {
         // Check hostname blocklist first
         if is_blocked_hostname(host) {
-            return Err(ScrapeError::SsrfAttempt(
-                format!("Access to blocked hostname '{}' is not allowed", host)
-            ));
+            return Err(ScrapeError::SsrfAttempt(format!(
+                "Access to blocked hostname '{}' is not allowed",
+                host
+            )));
         }
 
         // Try to parse as IP address
         if let Ok(ip) = host.parse::<IpAddr>() {
             if is_private_ip(&ip) {
-                return Err(ScrapeError::SsrfAttempt(
-                    format!("Access to private IP {} is not allowed", ip)
-                ));
+                return Err(ScrapeError::SsrfAttempt(format!(
+                    "Access to private IP {} is not allowed",
+                    ip
+                )));
             }
         }
 
@@ -89,9 +92,11 @@ pub async fn validate_url_safe(url: &str) -> Result<()> {
             Ok(addrs) => {
                 for addr in addrs {
                     if is_private_ip(&addr.ip()) {
-                        return Err(ScrapeError::SsrfAttempt(
-                            format!("Domain {} resolves to private IP {}", host, addr.ip())
-                        ));
+                        return Err(ScrapeError::SsrfAttempt(format!(
+                            "Domain {} resolves to private IP {}",
+                            host,
+                            addr.ip()
+                        )));
                     }
                 }
             }
@@ -155,8 +160,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_block_metadata_endpoints() {
-        assert!(validate_url_safe("http://metadata.google.internal/computeMetadata/v1/").await.is_err());
-        assert!(validate_url_safe("http://169.254.169.254/latest/meta-data/").await.is_err());
+        assert!(
+            validate_url_safe("http://metadata.google.internal/computeMetadata/v1/")
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_url_safe("http://169.254.169.254/latest/meta-data/")
+                .await
+                .is_err()
+        );
     }
 }
 
@@ -170,20 +183,28 @@ mod integration_tests {
         // Block localhost
         assert!(validate_url_safe("http://localhost/secret").await.is_err());
         assert!(validate_url_safe("http://127.0.0.1/secret").await.is_err());
-        assert!(validate_url_safe("http://127.0.0.1:8080/admin").await.is_err());
+        assert!(validate_url_safe("http://127.0.0.1:8080/admin")
+            .await
+            .is_err());
 
         // Block private networks
-        assert!(validate_url_safe("http://192.168.0.1/router").await.is_err());
+        assert!(validate_url_safe("http://192.168.0.1/router")
+            .await
+            .is_err());
         assert!(validate_url_safe("http://192.168.1.1/admin").await.is_err());
         assert!(validate_url_safe("http://10.0.0.1/internal").await.is_err());
         assert!(validate_url_safe("http://172.16.0.1/vpn").await.is_err());
 
         // Block link-local
-        assert!(validate_url_safe("http://169.254.169.254/metadata").await.is_err());
+        assert!(validate_url_safe("http://169.254.169.254/metadata")
+            .await
+            .is_err());
 
         // Block invalid schemes
         assert!(validate_url_safe("file:///etc/passwd").await.is_err());
-        assert!(validate_url_safe("ftp://internal.server/data").await.is_err());
+        assert!(validate_url_safe("ftp://internal.server/data")
+            .await
+            .is_err());
         assert!(validate_url_safe("ssh://server.local/").await.is_err());
 
         // Allow public URLs
@@ -213,18 +234,26 @@ mod integration_tests {
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))));
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(172, 31, 255, 255))));
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(192, 168, 255, 255))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
+            192, 168, 255, 255
+        ))));
 
         // Test loopback
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(127, 255, 255, 255))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
+            127, 255, 255, 255
+        ))));
 
         // Test link-local
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(169, 254, 0, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(169, 254, 255, 255))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
+            169, 254, 255, 255
+        ))));
 
         // Test broadcast
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255))));
+        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(
+            255, 255, 255, 255
+        ))));
 
         // Test reserved
         assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))));
@@ -258,11 +287,23 @@ mod integration_tests {
     #[tokio::test]
     async fn test_cloud_metadata_protection() {
         // AWS metadata endpoints
-        assert!(validate_url_safe("http://169.254.169.254/latest/meta-data/").await.is_err());
-        assert!(validate_url_safe("http://instance-data/latest/meta-data/").await.is_err());
+        assert!(
+            validate_url_safe("http://169.254.169.254/latest/meta-data/")
+                .await
+                .is_err()
+        );
+        assert!(validate_url_safe("http://instance-data/latest/meta-data/")
+            .await
+            .is_err());
 
         // GCP metadata endpoints
-        assert!(validate_url_safe("http://metadata.google.internal/computeMetadata/v1/").await.is_err());
-        assert!(validate_url_safe("http://metadata/computeMetadata/v1/").await.is_err());
+        assert!(
+            validate_url_safe("http://metadata.google.internal/computeMetadata/v1/")
+                .await
+                .is_err()
+        );
+        assert!(validate_url_safe("http://metadata/computeMetadata/v1/")
+            .await
+            .is_err());
     }
 }

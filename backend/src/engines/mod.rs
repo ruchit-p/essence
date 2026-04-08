@@ -4,7 +4,6 @@ pub mod http;
 pub mod racer;
 pub mod stealth;
 
-
 use crate::{error::Result, types::ScrapeRequest};
 use async_trait::async_trait;
 use detection::{DetectionResult, RenderingDetector};
@@ -56,7 +55,10 @@ pub fn detect_engine_needed(url: &str, html: &str) -> EngineType {
         return EngineType::Browser;
     }
 
-    debug!("No JavaScript rendering needed: {}", detection_result.reason);
+    debug!(
+        "No JavaScript rendering needed: {}",
+        detection_result.reason
+    );
     EngineType::Http
 }
 
@@ -164,7 +166,10 @@ fn is_likely_error_page(html: &str, status_code: u16) -> bool {
         let mut error_count = 0;
 
         // Check title for error indicators
-        if title_indicators.iter().any(|&indicator| lower.contains(indicator)) {
+        if title_indicators
+            .iter()
+            .any(|&indicator| lower.contains(indicator))
+        {
             error_count += 1;
         }
 
@@ -179,7 +184,10 @@ fn is_likely_error_page(html: &str, status_code: u16) -> bool {
             "<h2>not found",
         ];
 
-        if heading_indicators.iter().any(|&indicator| lower.contains(indicator)) {
+        if heading_indicators
+            .iter()
+            .any(|&indicator| lower.contains(indicator))
+        {
             error_count += 1;
         }
 
@@ -190,7 +198,10 @@ fn is_likely_error_page(html: &str, status_code: u16) -> bool {
             "the page you requested could not be found",
         ];
 
-        if body_indicators.iter().any(|&indicator| lower.contains(indicator)) {
+        if body_indicators
+            .iter()
+            .any(|&indicator| lower.contains(indicator))
+        {
             error_count += 1;
         }
 
@@ -205,15 +216,16 @@ fn is_likely_error_page(html: &str, status_code: u16) -> bool {
 /// Check if HTML has valid page metadata indicating it's a real page
 fn has_valid_page_metadata(html: &str) -> bool {
     let valid_patterns = [
-        "<meta property=\"og:type\"",        // OpenGraph type
-        "<meta property=\"og:title\"",      // OpenGraph title
-        "<meta name=\"description\"",       // Meta description
-        "application/ld+json",              // Structured data
-        "<meta property=\"twitter:card\"",  // Twitter card
+        "<meta property=\"og:type\"",      // OpenGraph type
+        "<meta property=\"og:title\"",     // OpenGraph title
+        "<meta name=\"description\"",      // Meta description
+        "application/ld+json",             // Structured data
+        "<meta property=\"twitter:card\"", // Twitter card
     ];
 
     // If page has 2+ valid metadata patterns, it's likely a real page
-    let metadata_count = valid_patterns.iter()
+    let metadata_count = valid_patterns
+        .iter()
         .filter(|&&pattern| html.contains(pattern))
         .count();
 
@@ -487,7 +499,8 @@ The content density is reasonable.
         assert!(is_likely_error_page(error_in_heading, 200));
 
         // Page with just "error" in body text (only 1 indicator) should NOT be flagged
-        let normal_page = "<html><body><p>Welcome to our site. Error handling is important.</p></body></html>";
+        let normal_page =
+            "<html><body><p>Welcome to our site. Error handling is important.</p></body></html>";
         assert!(!is_likely_error_page(normal_page, 200));
 
         // IMDb-like page with "error occurred" in JavaScript should NOT be flagged

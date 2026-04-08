@@ -103,9 +103,7 @@ impl IntoResponse for ScrapeError {
                 StatusCode::BAD_REQUEST,
                 format!("Validation failed: {}", errors.join(", ")),
             ),
-            ScrapeError::BrowserNotFound(_) => {
-                (StatusCode::SERVICE_UNAVAILABLE, self.to_string())
-            }
+            ScrapeError::BrowserNotFound(_) => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
             ScrapeError::InvalidRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             ScrapeError::ResourceLimit(_) => (StatusCode::PAYLOAD_TOO_LARGE, self.to_string()),
             ScrapeError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".to_string()),

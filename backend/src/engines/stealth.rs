@@ -10,8 +10,8 @@
 //!
 //! Based on Firecrawl stealth proxy analysis and puppeteer-extra-plugin-stealth.
 
-use chromiumoxide::Page;
 use crate::error::{Result, ScrapeError};
+use chromiumoxide::Page;
 use rand::Rng;
 use tracing::{debug, info, warn};
 
@@ -55,7 +55,7 @@ impl StealthMode {
     /// Get timeout in milliseconds for this stealth mode
     pub fn timeout_ms(&self) -> u64 {
         match self {
-            StealthMode::None | StealthMode::Basic => 30_000,  // 30 seconds
+            StealthMode::None | StealthMode::Basic => 30_000, // 30 seconds
             StealthMode::Advanced | StealthMode::Auto => {
                 // Check env var, default to 120 seconds for advanced
                 std::env::var("BROWSER_STEALTH_TIMEOUT_MS")
@@ -101,9 +101,9 @@ pub async fn apply_stealth_techniques(page: &Page, mode: StealthMode) -> Result<
     // Inject JavaScript stealth code (embedded at compile time)
     let stealth_js = include_str!("stealth.js");
 
-    page.evaluate(stealth_js)
-        .await
-        .map_err(|e| ScrapeError::BrowserError(format!("Failed to inject stealth JavaScript: {}", e)))?;
+    page.evaluate(stealth_js).await.map_err(|e| {
+        ScrapeError::BrowserError(format!("Failed to inject stealth JavaScript: {}", e))
+    })?;
 
     debug!("JavaScript stealth injection successful");
 
@@ -133,12 +133,12 @@ async fn apply_advanced_stealth(page: &Page) -> Result<()> {
 
         // Randomize screen resolution (use common real-world values)
         let resolutions = [
-            (1920, 1080),  // Full HD (most common)
-            (1366, 768),   // HD (common laptop)
-            (1440, 900),   // Common Mac
-            (1536, 864),   // Common Windows
-            (1280, 720),   // HD
-            (1600, 900),   // HD+
+            (1920, 1080), // Full HD (most common)
+            (1366, 768),  // HD (common laptop)
+            (1440, 900),  // Common Mac
+            (1536, 864),  // Common Windows
+            (1280, 720),  // HD
+            (1600, 900),  // HD+
         ];
         let (w, h) = resolutions[rng.gen_range(0..resolutions.len())];
 
@@ -168,12 +168,17 @@ async fn apply_advanced_stealth(page: &Page) -> Result<()> {
         // Log fingerprint (for debugging)
         console.log('[Stealth] Fingerprint: {{width}}x{{height}}, {{cores}} cores, {{memory}}GB RAM');
         "#,
-        width, height, width, height - 40, cores, memory,
+        width,
+        height,
+        width,
+        height - 40,
+        cores,
+        memory,
     );
 
-    page.evaluate(fingerprint_js)
-        .await
-        .map_err(|e| ScrapeError::BrowserError(format!("Failed to apply fingerprint randomization: {}", e)))?;
+    page.evaluate(fingerprint_js).await.map_err(|e| {
+        ScrapeError::BrowserError(format!("Failed to apply fingerprint randomization: {}", e))
+    })?;
 
     info!(
         "Advanced stealth applied: {}x{} screen, {} cores, {}GB RAM",

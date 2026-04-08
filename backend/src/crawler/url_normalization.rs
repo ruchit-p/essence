@@ -45,7 +45,7 @@ pub fn generate_url_permutations(url: &str) -> Vec<String> {
             for trailing_slash in [true, false] {
                 for index_file in [None, Some("index.html"), Some("index.php")] {
                     let mut perm_url = parsed.clone();
-                    
+
                     // Set scheme
                     if perm_url.set_scheme(scheme).is_err() {
                         continue;
@@ -60,7 +60,7 @@ pub fn generate_url_permutations(url: &str) -> Vec<String> {
                         } else {
                             host.to_string()
                         };
-                        
+
                         if perm_url.set_host(Some(&new_host)).is_err() {
                             continue;
                         }
@@ -68,7 +68,7 @@ pub fn generate_url_permutations(url: &str) -> Vec<String> {
 
                     // Get the current path
                     let mut path = perm_url.path().to_string();
-                    
+
                     // Add/remove index files
                     if let Some(index) = index_file {
                         if !path.ends_with(index) {
@@ -81,12 +81,15 @@ pub fn generate_url_permutations(url: &str) -> Vec<String> {
                     } else {
                         // Remove index files if present
                         if path.ends_with("/index.html") {
-                            path = path.strip_suffix("/index.html").unwrap_or(&path).to_string();
+                            path = path
+                                .strip_suffix("/index.html")
+                                .unwrap_or(&path)
+                                .to_string();
                         } else if path.ends_with("/index.php") {
                             path = path.strip_suffix("/index.php").unwrap_or(&path).to_string();
                         }
                     }
-                    
+
                     // Add/remove trailing slash
                     if trailing_slash {
                         if !path.ends_with('/') && !path.is_empty() {
@@ -95,7 +98,7 @@ pub fn generate_url_permutations(url: &str) -> Vec<String> {
                     } else if path.ends_with('/') && path != "/" {
                         path = path.strip_suffix('/').unwrap_or(&path).to_string();
                     }
-                    
+
                     // Ensure path is not empty
                     if path.is_empty() {
                         path = "/".to_string();
@@ -179,7 +182,10 @@ pub fn normalize_url(url: &str) -> String {
 
     // 5. Then remove index.html/index.php (after trailing slashes are gone)
     if path.ends_with("/index.html") {
-        path = path.strip_suffix("/index.html").unwrap_or(&path).to_string();
+        path = path
+            .strip_suffix("/index.html")
+            .unwrap_or(&path)
+            .to_string();
     } else if path.ends_with("/index.php") {
         path = path.strip_suffix("/index.php").unwrap_or(&path).to_string();
     } else if path == "index.html" || path == "index.php" {
@@ -195,7 +201,8 @@ pub fn normalize_url(url: &str) -> String {
     parsed.set_path(&path);
 
     // 6. Sort query parameters alphabetically
-    let query_pairs: Vec<(String, String)> = parsed.query_pairs()
+    let query_pairs: Vec<(String, String)> = parsed
+        .query_pairs()
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
     if !query_pairs.is_empty() {
@@ -224,7 +231,7 @@ mod tests {
             normalize_url("https://www.example.com/page"),
             "https://example.com/page"
         );
-        
+
         assert_eq!(
             normalize_url("https://www.subdomain.example.com/page"),
             "https://subdomain.example.com/page"
@@ -237,7 +244,7 @@ mod tests {
             normalize_url("http://example.com/page"),
             "https://example.com/page"
         );
-        
+
         assert_eq!(
             normalize_url("http://www.example.com/page"),
             "https://example.com/page"
@@ -250,17 +257,14 @@ mod tests {
             normalize_url("https://example.com/page/"),
             "https://example.com/page"
         );
-        
+
         // But keep for root
         assert_eq!(
             normalize_url("https://example.com/"),
             "https://example.com/"
         );
-        
-        assert_eq!(
-            normalize_url("https://example.com"),
-            "https://example.com/"
-        );
+
+        assert_eq!(normalize_url("https://example.com"), "https://example.com/");
     }
 
     #[test]
@@ -269,12 +273,12 @@ mod tests {
             normalize_url("https://example.com/page/index.html"),
             "https://example.com/page"
         );
-        
+
         assert_eq!(
             normalize_url("https://example.com/page/index.php"),
             "https://example.com/page"
         );
-        
+
         assert_eq!(
             normalize_url("https://example.com/index.html"),
             "https://example.com/"
@@ -287,7 +291,7 @@ mod tests {
             normalize_url("https://example.com/page?z=1&a=2"),
             "https://example.com/page?a=2&z=1"
         );
-        
+
         assert_eq!(
             normalize_url("https://example.com/page?c=3&b=2&a=1"),
             "https://example.com/page?a=1&b=2&c=3"
@@ -300,7 +304,7 @@ mod tests {
             normalize_url("https://example.com/page#section"),
             "https://example.com/page"
         );
-        
+
         assert_eq!(
             normalize_url("https://example.com/page?key=value#section"),
             "https://example.com/page?key=value"
@@ -313,31 +317,41 @@ mod tests {
         // Should generate permutations (at least 8)
         // 2 schemes × 2 www × 2 trailing slash × 3 index files = 24 potential combinations
         // Some may be deduplicated
-        assert!(perms.len() >= 8 && perms.len() <= 32, "Expected 8-32 permutations, got {}", perms.len());
+        assert!(
+            perms.len() >= 8 && perms.len() <= 32,
+            "Expected 8-32 permutations, got {}",
+            perms.len()
+        );
     }
 
     #[test]
     fn test_generate_permutations_includes_variants() {
         let perms = generate_url_permutations("https://example.com/page");
-        
+
         // Should include various combinations
-        assert!(perms.contains(&"http://example.com/page".to_string()), 
-                "Should include http variant");
-        assert!(perms.contains(&"https://www.example.com/page".to_string()),
-                "Should include www variant");
-        assert!(perms.contains(&"https://example.com/page/".to_string()),
-                "Should include trailing slash variant");
+        assert!(
+            perms.contains(&"http://example.com/page".to_string()),
+            "Should include http variant"
+        );
+        assert!(
+            perms.contains(&"https://www.example.com/page".to_string()),
+            "Should include www variant"
+        );
+        assert!(
+            perms.contains(&"https://example.com/page/".to_string()),
+            "Should include trailing slash variant"
+        );
     }
 
     #[test]
     fn test_normalization_idempotent() {
         let url = "https://example.com/page";
         assert_eq!(
-            normalize_url(&normalize_url(url)), 
+            normalize_url(&normalize_url(url)),
             normalize_url(url),
             "Normalization should be idempotent"
         );
-        
+
         let complex_url = "http://www.example.com/page/?z=1&a=2#section";
         assert_eq!(
             normalize_url(&normalize_url(complex_url)),
@@ -375,7 +389,7 @@ mod tests {
             normalize_url("http://example.com:8080/page"),
             "https://example.com:8080/page"
         );
-        
+
         assert_eq!(
             normalize_url("http://www.example.com:8080/page/"),
             "https://example.com:8080/page"
@@ -387,7 +401,7 @@ mod tests {
         // URL with userinfo (rare but valid)
         let url_with_user = "http://user:pass@example.com/page";
         let normalized = normalize_url(url_with_user);
-        
+
         // Should preserve userinfo but normalize other parts
         assert!(normalized.contains("user:pass@"));
         assert!(normalized.starts_with("https://"));
@@ -396,7 +410,11 @@ mod tests {
     #[test]
     fn test_normalize_invalid_url() {
         let invalid = "not a valid url";
-        assert_eq!(normalize_url(invalid), invalid, "Invalid URLs should be returned as-is");
+        assert_eq!(
+            normalize_url(invalid),
+            invalid,
+            "Invalid URLs should be returned as-is"
+        );
     }
 
     #[test]
@@ -413,7 +431,7 @@ mod tests {
             normalize_url("HTTP://WWW.EXAMPLE.COM/Page"),
             "https://example.com/Page"
         );
-        
+
         // Host should be lowercase, path should preserve case
         let normalized = normalize_url("HTTPS://EXAMPLE.COM/MyPage");
         assert!(normalized.starts_with("https://example.com/"));
@@ -425,15 +443,15 @@ mod tests {
         // Test with international domain names
         let url = "https://example.com/café";
         let normalized = normalize_url(url);
-        assert!(normalized.contains("caf"), "Should handle non-ASCII characters");
+        assert!(
+            normalized.contains("caf"),
+            "Should handle non-ASCII characters"
+        );
     }
 
     #[test]
     fn test_normalize_url_empty_path() {
-        assert_eq!(
-            normalize_url("https://example.com"),
-            "https://example.com/"
-        );
+        assert_eq!(normalize_url("https://example.com"), "https://example.com/");
     }
 
     #[test]
@@ -461,7 +479,7 @@ mod tests {
             normalize_url("https://blog.example.com/page"),
             "https://blog.example.com/page"
         );
-        
+
         assert_eq!(
             normalize_url("https://www.blog.example.com/page"),
             "https://blog.example.com/page"
@@ -526,12 +544,12 @@ mod tests {
             normalize_url("https://example.com/path/with-dashes"),
             "https://example.com/path/with-dashes"
         );
-        
+
         assert_eq!(
             normalize_url("https://example.com/path_with_underscores"),
             "https://example.com/path_with_underscores"
         );
-        
+
         assert_eq!(
             normalize_url("https://example.com/path.with.dots"),
             "https://example.com/path.with.dots"
@@ -549,50 +567,52 @@ mod tests {
 }
 #[cfg(test)]
 mod demo {
-    use crate::crawler::url_normalization::{normalize_url, generate_url_permutations};
-    
+    use crate::crawler::url_normalization::{generate_url_permutations, normalize_url};
+
     #[test]
     fn demo_normalization() {
         println!("\n=== URL Normalization Demo ===\n");
-        
+
         let test_cases = vec![
             "http://www.example.com/page/",
             "https://example.com/page?z=1&a=2",
             "http://www.example.com/index.html#section",
             "https://example.com/page/index.php/",
         ];
-        
+
         for url in test_cases {
             let normalized = normalize_url(url);
             println!("  {} \n    → {}\n", url, normalized);
         }
     }
-    
+
     #[test]
     fn demo_permutations() {
         println!("\n=== URL Permutations Demo ===\n");
-        
+
         let url = "https://example.com/page";
         let perms = generate_url_permutations(url);
-        
+
         println!("Base URL: {}", url);
         println!("Generated {} permutations:\n", perms.len());
-        
+
         for (i, perm) in perms.iter().enumerate().take(10) {
             println!("  {}. {}", i + 1, perm);
         }
-        
+
         if perms.len() > 10 {
             println!("  ... and {} more", perms.len() - 10);
         }
-        
+
         // Show they all normalize to same
-        let normalized: std::collections::HashSet<_> = perms.iter()
-            .map(|p| normalize_url(p))
-            .collect();
-        
-        println!("\nAll {} permutations normalize to {} unique URL(s):", 
-                 perms.len(), normalized.len());
+        let normalized: std::collections::HashSet<_> =
+            perms.iter().map(|p| normalize_url(p)).collect();
+
+        println!(
+            "\nAll {} permutations normalize to {} unique URL(s):",
+            perms.len(),
+            normalized.len()
+        );
         for norm in normalized {
             println!("  → {}", norm);
         }

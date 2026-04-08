@@ -77,10 +77,11 @@ pub async fn scrape_core_logic(request: &ScrapeRequest) -> Result<ScrapeResponse
 
                 let racer = get_shared_racer(settings.engine.waterfall_delay_ms).await?;
 
-                let (raw_result, metrics) = racer.race_scrape_with_metrics(request).await.map_err(|e| {
-                    error!("Waterfall race failed for URL {}: {}", request.url, e);
-                    e
-                })?;
+                let (raw_result, metrics) =
+                    racer.race_scrape_with_metrics(request).await.map_err(|e| {
+                        error!("Waterfall race failed for URL {}: {}", request.url, e);
+                        e
+                    })?;
 
                 info!(
                     "Waterfall race completed: winner={}, elapsed={}ms, browser_started={}",
@@ -101,14 +102,18 @@ pub async fn scrape_core_logic(request: &ScrapeRequest) -> Result<ScrapeResponse
                 // Waterfall disabled - use legacy sequential fallback
                 info!("Auto-detecting engine type (waterfall disabled)...");
 
-                let http_engine = HttpEngine::with_options(request.timeout, request.skip_tls_verification)
-                    .map_err(|e| {
-                        error!("Failed to create HTTP engine: {}", e);
-                        e
-                    })?;
+                let http_engine =
+                    HttpEngine::with_options(request.timeout, request.skip_tls_verification)
+                        .map_err(|e| {
+                            error!("Failed to create HTTP engine: {}", e);
+                            e
+                        })?;
 
                 let http_result = http_engine.scrape(request).await.map_err(|e| {
-                    error!("Failed to scrape URL with HTTP engine {}: {}", request.url, e);
+                    error!(
+                        "Failed to scrape URL with HTTP engine {}: {}",
+                        request.url, e
+                    );
                     e
                 })?;
 

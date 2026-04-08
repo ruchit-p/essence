@@ -34,10 +34,7 @@ impl RetryConfig {
 }
 
 /// Retry a fallible async operation with exponential backoff
-pub async fn retry_with_backoff<F, Fut, T, E>(
-    operation: F,
-    config: &RetryConfig,
-) -> Result<T, E>
+pub async fn retry_with_backoff<F, Fut, T, E>(operation: F, config: &RetryConfig) -> Result<T, E>
 where
     F: Fn() -> Fut,
     Fut: std::future::Future<Output = Result<T, E>>,

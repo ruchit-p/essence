@@ -118,11 +118,8 @@ impl ScrapeEngine for HttpEngine {
         );
 
         // Wrap the scrape operation in retry logic
-        let result = retry_with_backoff(
-            || async { self.scrape_once(request).await },
-            &retry_config,
-        )
-        .await;
+        let result =
+            retry_with_backoff(|| async { self.scrape_once(request).await }, &retry_config).await;
 
         // Track duration
         let duration = start.elapsed().as_secs_f64();
@@ -131,15 +128,12 @@ impl ScrapeEngine for HttpEngine {
         if let Err(ref e) = result {
             warn!(
                 "HTTP engine failed for {} after {:.2}s: {}",
-                request.url,
-                duration,
-                e
+                request.url, duration, e
             );
         } else {
             info!(
                 "HTTP engine succeeded for {} in {:.2}s",
-                request.url,
-                duration
+                request.url, duration
             );
         }
 
@@ -156,11 +150,10 @@ impl HttpEngine {
         let url_str = rewrite_url(&request.url);
 
         // Validate URL
-        let url = reqwest::Url::parse(&url_str)
-            .map_err(|e| {
-                warn!("URL parsing failed for '{}': {}", url_str, e);
-                ScrapeError::InvalidUrl(format!("Invalid URL: {}", e))
-            })?;
+        let url = reqwest::Url::parse(&url_str).map_err(|e| {
+            warn!("URL parsing failed for '{}': {}", url_str, e);
+            ScrapeError::InvalidUrl(format!("Invalid URL: {}", e))
+        })?;
 
         debug!("Starting HTTP request to: {}", url);
 
@@ -202,7 +195,10 @@ impl HttpEngine {
         req_builder = req_builder
             .header("User-Agent", &user_agent)
             // Browser-like headers to reduce anti-bot detection
-            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .header(
+                "Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            )
             .header("Accept-Language", "en-US,en;q=0.5")
             .header("Upgrade-Insecure-Requests", "1")
             .header("Sec-Fetch-Dest", "document")
@@ -282,10 +278,7 @@ impl HttpEngine {
             .collect();
 
         // Get HTML content with charset detection
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(ScrapeError::RequestFailed)?;
+        let bytes = response.bytes().await.map_err(ScrapeError::RequestFailed)?;
 
         // Detect charset from Content-Type or HTML meta tag
         let encoding = detect_charset(&bytes, content_type.as_deref());
@@ -293,7 +286,11 @@ impl HttpEngine {
         // Decode with detected charset
         let (html, _, had_errors) = encoding.decode(&bytes);
         if had_errors {
-            debug!("Charset decoding had errors for {}, encoding: {}", url, encoding.name());
+            debug!(
+                "Charset decoding had errors for {}, encoding: {}",
+                url,
+                encoding.name()
+            );
         }
         let html = html.into_owned();
 
@@ -378,7 +375,9 @@ fn extract_charset_from_meta(html: &str) -> Option<String> {
     }
 
     // Try <meta http-equiv="Content-Type" content="...; charset=...">
-    if let Ok(re) = Regex::new(r#"(?i)<meta\s+http-equiv\s*=\s*["']?content-type["']?\s+content\s*=\s*["'][^"']*charset=([^"'\s;]+)"#) {
+    if let Ok(re) = Regex::new(
+        r#"(?i)<meta\s+http-equiv\s*=\s*["']?content-type["']?\s+content\s*=\s*["'][^"']*charset=([^"'\s;]+)"#,
+    ) {
         if let Some(caps) = re.captures(html) {
             if let Some(m) = caps.get(1) {
                 return Some(m.as_str().to_string());
@@ -458,7 +457,9 @@ mod tests {
             Some("UTF-8".to_string())
         );
         assert_eq!(
-            extract_charset_from_meta(r#"<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">"#),
+            extract_charset_from_meta(
+                r#"<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">"#
+            ),
             Some("ISO-8859-1".to_string())
         );
         assert_eq!(extract_charset_from_meta("<html></html>"), None);

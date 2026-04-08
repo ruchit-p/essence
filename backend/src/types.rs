@@ -271,7 +271,6 @@ impl Default for Metadata {
     }
 }
 
-
 // Default function for optional bools
 fn default_true_option() -> Option<bool> {
     Some(true)
@@ -700,10 +699,7 @@ pub enum CrawlEvent {
         metadata: Box<Metadata>,
     },
     /// Error event for individual URL
-    Error {
-        url: String,
-        error: String,
-    },
+    Error { url: String, error: String },
     /// Crawl completion event
     Complete {
         total_pages: usize,

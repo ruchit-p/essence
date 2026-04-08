@@ -146,7 +146,11 @@ impl EngineRacer {
                             return Ok(raw);
                         }
                         // Low content — check if it's a true SPA shell
-                        let detection = crate::engines::detection::RenderingDetector::needs_javascript(&raw.html, &request.url);
+                        let detection =
+                            crate::engines::detection::RenderingDetector::needs_javascript(
+                                &raw.html,
+                                &request.url,
+                            );
                         if detection.needs_js {
                             info!(
                                 "Low content ({} chars) + SPA/JS detected ({}), racing with browser for {}",
@@ -156,7 +160,8 @@ impl EngineRacer {
                         } else if text_len > 200 {
                             info!(
                                 "HTTP engine won the race ({}ms) with adequate quality ({} chars)",
-                                http_duration.as_millis(), text_len
+                                http_duration.as_millis(),
+                                text_len
                             );
                             return Ok(raw);
                         } else {
@@ -172,7 +177,11 @@ impl EngineRacer {
                     }
                 }
                 Err(e) => {
-                    warn!("HTTP engine failed in {}ms: {}, racing with browser", http_duration.as_millis(), e);
+                    warn!(
+                        "HTTP engine failed in {}ms: {}, racing with browser",
+                        http_duration.as_millis(),
+                        e
+                    );
                     // Fall through to race with browser
                 }
             }
@@ -213,7 +222,10 @@ impl EngineRacer {
             // HTTP already completed but failed/low quality, just use browser
             let result = browser_future.await;
             let duration = browser_start.elapsed();
-            info!("Browser engine used as fallback ({}ms)", duration.as_millis());
+            info!(
+                "Browser engine used as fallback ({}ms)",
+                duration.as_millis()
+            );
             (result, "browser_fallback")
         };
 
@@ -282,7 +294,10 @@ impl EngineRacer {
                     false // Rich content, return HTTP regardless of framework markers
                 } else {
                     // Low content — check if it's a true SPA shell
-                    let detection = crate::engines::detection::RenderingDetector::needs_javascript(&raw.html, &request.url);
+                    let detection = crate::engines::detection::RenderingDetector::needs_javascript(
+                        &raw.html,
+                        &request.url,
+                    );
                     if detection.needs_js {
                         info!(
                             "Low content ({} chars) + SPA/JS detected ({}), falling back to browser for {}",
@@ -362,10 +377,12 @@ impl EngineRacer {
             let result = browser_future.await;
             let duration = browser_start.elapsed();
             let status = match &result {
-                Ok(_) => EngineStatus::Success { duration_ms: duration.as_millis() as u64 },
+                Ok(_) => EngineStatus::Success {
+                    duration_ms: duration.as_millis() as u64,
+                },
                 Err(e) => EngineStatus::Failed {
                     duration_ms: duration.as_millis() as u64,
-                    error: e.to_string()
+                    error: e.to_string(),
                 },
             };
             (result, "browser_fallback", Some(status))
@@ -389,7 +406,10 @@ fn should_fallback_to_browser(raw: &RawScrapeResult) -> bool {
     match raw.status_code {
         401 | 403 => {
             // Unauthorized or Forbidden - likely anti-bot or auth required
-            info!("Detected blocking status code {}, will try browser fallback", raw.status_code);
+            info!(
+                "Detected blocking status code {}, will try browser fallback",
+                raw.status_code
+            );
             true
         }
         429 => {
@@ -439,18 +459,14 @@ fn extract_visible_text_len(html: &str) -> usize {
     let skip_selector = Selector::parse("script, style, noscript").ok();
     let skip_ids: std::collections::HashSet<_> = skip_selector
         .as_ref()
-        .map(|s| {
-            document
-                .select(s)
-                .map(|el| el.id())
-                .collect()
-        })
+        .map(|s| document.select(s).map(|el| el.id()).collect())
         .unwrap_or_default();
 
     let mut text = String::new();
     for node in root.descendants() {
         if let Some(el) = node.value().as_element() {
-            if skip_ids.contains(&node.id()) || matches!(el.name(), "script" | "style" | "noscript") {
+            if skip_ids.contains(&node.id()) || matches!(el.name(), "script" | "style" | "noscript")
+            {
                 continue;
             }
         }
@@ -573,7 +589,10 @@ mod tests {
     #[tokio::test]
     async fn test_racer_with_custom_delay() {
         let racer = EngineRacer::with_delay(3000).await;
-        assert!(racer.is_ok(), "Racer creation with custom delay should succeed");
+        assert!(
+            racer.is_ok(),
+            "Racer creation with custom delay should succeed"
+        );
 
         let racer = racer.unwrap();
         assert_eq!(

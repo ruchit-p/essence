@@ -38,7 +38,7 @@ impl DomainRateLimiter {
                 .limiters
                 .lock()
                 .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-            
+
             limiters
                 .entry(domain.clone())
                 .or_insert_with(|| Arc::new(RateLimiter::direct(self.default_quota)))
@@ -48,10 +48,7 @@ impl DomainRateLimiter {
         // Wait until we have permission (non-blocking in async context)
         limiter.until_ready().await;
 
-        tracing::debug!(
-            "Rate limiter: Granted permission for domain: {}",
-            domain
-        );
+        tracing::debug!("Rate limiter: Granted permission for domain: {}", domain);
 
         Ok(())
     }
@@ -70,7 +67,10 @@ impl DomainRateLimiter {
     pub fn throttle_domain(&self, url: &str) {
         if let Ok(domain) = Self::extract_domain(url) {
             self.set_domain_rate(&domain, 1);
-            tracing::warn!("Throttled domain {} to 1 req/sec due to rate limiting", domain);
+            tracing::warn!(
+                "Throttled domain {} to 1 req/sec due to rate limiting",
+                domain
+            );
         }
     }
 

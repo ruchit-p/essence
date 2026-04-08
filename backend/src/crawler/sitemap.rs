@@ -50,7 +50,10 @@ impl SitemapParser {
 
         // Strategy 1: Check robots.txt for all Sitemap directives
         if let Ok(robots_sitemaps) = self.check_robots_txt(base_url).await {
-            info!("Found {} sitemap URL(s) in robots.txt", robots_sitemaps.len());
+            info!(
+                "Found {} sitemap URL(s) in robots.txt",
+                robots_sitemaps.len()
+            );
             for sitemap_url in &robots_sitemaps {
                 info!("Fetching robots.txt sitemap: {}", sitemap_url);
                 match self
@@ -189,10 +192,9 @@ impl SitemapParser {
                 )));
             }
 
-            let bytes = response
-                .bytes()
-                .await
-                .map_err(|e| ScrapeError::Internal(format!("Failed to read sitemap content: {}", e)))?;
+            let bytes = response.bytes().await.map_err(|e| {
+                ScrapeError::Internal(format!("Failed to read sitemap content: {}", e))
+            })?;
 
             // Detect gzip (magic bytes 0x1f, 0x8b) and decompress if needed
             let content = if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {

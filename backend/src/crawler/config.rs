@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use tracing::{debug, warn};
 use crate::error::Result;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tracing::{debug, warn};
 
 /// Configuration for crawler with memory and queue limits
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,7 +105,10 @@ impl CircuitBreaker {
         *count += 1;
 
         if *count >= self.threshold {
-            warn!("Circuit breaker triggered for domain: {} ({} failures)", domain, count);
+            warn!(
+                "Circuit breaker triggered for domain: {} ({} failures)",
+                domain, count
+            );
         }
     }
 
@@ -131,7 +134,10 @@ impl CircuitBreaker {
     /// Get total number of domains in failure state
     pub fn get_total_failures(&self) -> usize {
         let failures = self.failures.lock().unwrap();
-        failures.values().filter(|&&count| count >= self.threshold).count()
+        failures
+            .values()
+            .filter(|&&count| count >= self.threshold)
+            .count()
     }
 }
 
@@ -167,10 +173,7 @@ impl MemoryMonitor {
             )));
         }
 
-        debug!(
-            "Memory check: {}MB / {}MB",
-            current, self.max_memory_mb
-        );
+        debug!("Memory check: {}MB / {}MB", current, self.max_memory_mb);
         Ok(())
     }
 
@@ -296,9 +299,9 @@ mod tests {
 
     #[test]
     fn test_memory_monitor_enabled() {
-        let monitor = MemoryMonitor::new(100, true);
+        // Use a high limit (4GB) so the test process never exceeds it
+        let monitor = MemoryMonitor::new(4096, true);
 
-        // Lightweight mode always succeeds
         assert!(monitor.check_memory_limit().is_ok());
     }
 }

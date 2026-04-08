@@ -39,9 +39,12 @@ impl AdvancedExtractor {
     /// Extract article content using Mozilla's Readability algorithm
     pub fn extract_article(html: &str, url: &str) -> Result<ArticleContent> {
         // Use readability to extract main article content
-        let article = extract(&mut html.as_bytes(), &url::Url::parse(url).map_err(|e| {
-            ScrapeError::ParseError(format!("Invalid URL for readability: {}", e))
-        })?)
+        let article = extract(
+            &mut html.as_bytes(),
+            &url::Url::parse(url).map_err(|e| {
+                ScrapeError::ParseError(format!("Invalid URL for readability: {}", e))
+            })?,
+        )
         .map_err(|e| ScrapeError::ParseError(format!("Readability extraction failed: {}", e)))?;
 
         let text = article.text.trim().to_string();
@@ -77,11 +80,11 @@ impl AdvancedExtractor {
 
         // Find the last sentence boundary before MAX_EXCERPT_LENGTH
         let excerpt_candidate = &text[..MAX_EXCERPT_LENGTH];
-        
+
         // Look for sentence endings: . ! ?
         let sentence_endings = [". ", "! ", "? "];
         let mut last_sentence_end = 0;
-        
+
         for ending in &sentence_endings {
             if let Some(pos) = excerpt_candidate.rfind(ending) {
                 last_sentence_end = last_sentence_end.max(pos + ending.len());
@@ -99,7 +102,10 @@ impl AdvancedExtractor {
         }
 
         // Fallback: just truncate with ellipsis
-        Some(format!("{}...", &text[..MAX_EXCERPT_LENGTH.min(text.len())]))
+        Some(format!(
+            "{}...",
+            &text[..MAX_EXCERPT_LENGTH.min(text.len())]
+        ))
     }
 
     /// Detect language using whatlang
@@ -152,9 +158,10 @@ impl AdvancedExtractor {
 
         for table in document.select(&table_selector) {
             // Extract headers
-            let header_selector = Selector::parse("thead th, thead td")
-                .map_err(|e| ScrapeError::ParseError(format!("Invalid header selector: {:?}", e)))?;
-            
+            let header_selector = Selector::parse("thead th, thead td").map_err(|e| {
+                ScrapeError::ParseError(format!("Invalid header selector: {:?}", e))
+            })?;
+
             let headers: Vec<String> = table
                 .select(&header_selector)
                 .map(|th| th.text().collect::<String>().trim().to_string())
@@ -164,8 +171,10 @@ impl AdvancedExtractor {
             // If no headers in thead, try first tr
             let headers = if headers.is_empty() {
                 let first_row_selector = Selector::parse("tr:first-child th, tr:first-child td")
-                    .map_err(|e| ScrapeError::ParseError(format!("Invalid first row selector: {:?}", e)))?;
-                
+                    .map_err(|e| {
+                        ScrapeError::ParseError(format!("Invalid first row selector: {:?}", e))
+                    })?;
+
                 table
                     .select(&first_row_selector)
                     .map(|td| td.text().collect::<String>().trim().to_string())
@@ -190,7 +199,8 @@ impl AdvancedExtractor {
                 Selector::parse("tbody tr")
             } else {
                 Selector::parse("tr")
-            }.map_err(|e| ScrapeError::ParseError(format!("Invalid row selector: {:?}", e)))?;
+            }
+            .map_err(|e| ScrapeError::ParseError(format!("Invalid row selector: {:?}", e)))?;
 
             let cell_selector = Selector::parse("td, th")
                 .map_err(|e| ScrapeError::ParseError(format!("Invalid cell selector: {:?}", e)))?;
@@ -211,7 +221,9 @@ impl AdvancedExtractor {
                 if !cells.is_empty() {
                     let mut row_map = HashMap::new();
                     for (j, cell) in cells.iter().enumerate() {
-                        let header = headers.get(j).cloned()
+                        let header = headers
+                            .get(j)
+                            .cloned()
                             .unwrap_or_else(|| format!("Column {}", j + 1));
                         row_map.insert(header, cell.clone());
                     }
@@ -256,7 +268,7 @@ mod tests {
         let excerpt = AdvancedExtractor::generate_excerpt(text).unwrap();
         assert!(excerpt.contains("first sentence"));
         assert!(excerpt.len() <= 210); // Allow for sentence boundary
-        // The excerpt should end at a sentence boundary before "cut off"
+                                       // The excerpt should end at a sentence boundary before "cut off"
         if excerpt.len() < text.len() {
             // If truncated, should not include the last part
             assert!(excerpt.ends_with('.') || excerpt.ends_with("..."));
@@ -311,9 +323,8 @@ mod tests {
         eprintln!("Headers: {:?}", tables[0].headers);
 
         // The scraper might include whitespace as a third element, so let's filter
-        let non_empty_headers: Vec<_> = tables[0].headers.iter()
-            .filter(|h| !h.is_empty())
-            .collect();
+        let non_empty_headers: Vec<_> =
+            tables[0].headers.iter().filter(|h| !h.is_empty()).collect();
 
         assert!(non_empty_headers.len() >= 2);
         assert!(tables[0].headers.contains(&"Name".to_string()));

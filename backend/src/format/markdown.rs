@@ -25,7 +25,10 @@ cached_regex!(RE_SETEXT_H1, r"(?m)^[ \t]*(.+)\n[ \t]*={3,}\s*$");
 cached_regex!(RE_SETEXT_H2, r"(?m)^[ \t]*(.+)\n[ \t]*-{3,}\s*$");
 cached_regex!(RE_ESCAPED_TAG, r"\\</?[a-zA-Z!][^\n>]*?\\?>");
 cached_regex!(RE_CSS_ROOT, r":root\{--[^}]+\}");
-cached_regex!(RE_BASE64_IMG, r"(!\[[^\]]*\])\(data:image/[^;]+;base64,[^)]*\)");
+cached_regex!(
+    RE_BASE64_IMG,
+    r"(!\[[^\]]*\])\(data:image/[^;]+;base64,[^)]*\)"
+);
 cached_regex!(RE_EMPTY_LINK, r"\[([^\]]*)\]\(\s*\)");
 cached_regex!(RE_EMPTY_LIST_RUN, r"(?m)(?:^\s*\*\s*\n){3,}");
 cached_regex!(RE_COLLAPSE_NEWLINES, r"\n\s*\n\s*\n+");
@@ -35,25 +38,40 @@ cached_regex!(RE_COLLAPSE_NEWLINES, r"\n\s*\n\s*\n+");
 cached_regex!(RE_IMG_TAG, r#"<img\s[^>]*?>"#);
 cached_regex!(RE_IMG_SRC, r#"src\s*=\s*["']([^"']+)["']"#);
 cached_regex!(RE_IMG_ALT, r#"alt\s*=\s*["']([^"']*?)["']"#);
-cached_regex!(RE_CATCHALL_TAG, r"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?>"); 
+cached_regex!(RE_CATCHALL_TAG, r"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?>");
 cached_regex!(RE_MULTI_NEWLINE, r"\n{3,}");
 
 // Pre-compiled regexes for link conversion (new: convert <a> to markdown instead of stripping)
-cached_regex!(RE_ANCHOR_TAG, r#"(?is)<a\s[^>]*?href\s*=\s*["']([^"']*)["'][^>]*?>(.*?)</a>"#);
+cached_regex!(
+    RE_ANCHOR_TAG,
+    r#"(?is)<a\s[^>]*?href\s*=\s*["']([^"']*)["'][^>]*?>(.*?)</a>"#
+);
 
-// Pre-compiled regexes for pre/code block preservation  
+// Pre-compiled regexes for pre/code block preservation
 // Captures the full <pre>...<code class="language-X">...</code>...</pre> block
-cached_regex!(RE_PRE_CODE, r#"(?is)<pre[^>]*?>\s*<code([^>]*)>(.*?)</code>\s*</pre>"#);
+cached_regex!(
+    RE_PRE_CODE,
+    r#"(?is)<pre[^>]*?>\s*<code([^>]*)>(.*?)</code>\s*</pre>"#
+);
 cached_regex!(RE_PRE_BARE, r#"(?is)<pre[^>]*?>(.*?)</pre>"#);
 // For extracting language from class attribute (Firecrawl: language-X, lang-X, highlight-X)
-cached_regex!(RE_LANG_CLASS, r#"(?i)\b(?:language|lang|highlight)-([a-zA-Z0-9_+-]+)"#);
+cached_regex!(
+    RE_LANG_CLASS,
+    r#"(?i)\b(?:language|lang|highlight)-([a-zA-Z0-9_+-]+)"#
+);
 
 // (bloat detection uses per-function LazyLock for selective table removal)
 
 // Pre-compiled regexes for heading-in-link extraction and tracking pixel removal
-cached_regex!(RE_HEADING_IN_LINK, r"\[\s*(#{1,6})\s+(.+?)\s*#{0,6}\s*\]\(([^)]+)\)");
+cached_regex!(
+    RE_HEADING_IN_LINK,
+    r"\[\s*(#{1,6})\s+(.+?)\s*#{0,6}\s*\]\(([^)]+)\)"
+);
 cached_regex!(RE_EMPTY_TEXT_LINK, r"(^|[^!])\[\]\([^)]+\)");
-cached_regex!(RE_TRACKING_PIXEL, r"!\[[^\]]*\]\([^)]*(?:s_1x2\.gif|pixel\.gif|spacer\.gif|blank\.gif|clear\.gif)[^)]*\)");
+cached_regex!(
+    RE_TRACKING_PIXEL,
+    r"!\[[^\]]*\]\([^)]*(?:s_1x2\.gif|pixel\.gif|spacer\.gif|blank\.gif|clear\.gif)[^)]*\)"
+);
 
 // (escape_multiline_links uses char-by-char iteration, no regex needed)
 
@@ -116,23 +134,24 @@ pub fn html_to_markdown(html: &str, base_url: &str, only_main: bool) -> Result<S
     // selectively strip only large tables while preserving small/important ones
     // (infoboxes, data tables with few rows).
     let markdown = if markdown.len() > content.len() * 3 && content.len() > 10000 {
-        static RE_INDIVIDUAL_TABLE: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"(?is)<table[^>]*>(.*?)</table>").unwrap()
-        });
-        let selective = RE_INDIVIDUAL_TABLE.replace_all(&content, |caps: &regex::Captures| {
-            let full_match = &caps[0];
-            let table_attrs = full_match.split('>').next().unwrap_or("");
-            // Preserve infoboxes, wikitables, and small tables
-            let is_important = table_attrs.contains("infobox")
-                || table_attrs.contains("wikitable")
-                || table_attrs.contains("data-table");
-            let row_count = full_match.matches("<tr").count();
-            if is_important || row_count <= 30 {
-                full_match.to_string()
-            } else {
-                "\n".to_string()
-            }
-        }).to_string();
+        static RE_INDIVIDUAL_TABLE: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"(?is)<table[^>]*>(.*?)</table>").unwrap());
+        let selective = RE_INDIVIDUAL_TABLE
+            .replace_all(&content, |caps: &regex::Captures| {
+                let full_match = &caps[0];
+                let table_attrs = full_match.split('>').next().unwrap_or("");
+                // Preserve infoboxes, wikitables, and small tables
+                let is_important = table_attrs.contains("infobox")
+                    || table_attrs.contains("wikitable")
+                    || table_attrs.contains("data-table");
+                let row_count = full_match.matches("<tr").count();
+                if is_important || row_count <= 30 {
+                    full_match.to_string()
+                } else {
+                    "\n".to_string()
+                }
+            })
+            .to_string();
         safe_parse_html(&selective)
     } else {
         markdown
@@ -197,9 +216,8 @@ pub fn html_to_markdown(html: &str, base_url: &str, only_main: bool) -> Result<S
 /// Extract <title> text from raw HTML for title injection on bare pages.
 /// Uses regex to avoid re-parsing the full document.
 fn extract_title_from_html(html: &str) -> Option<String> {
-    static RE_TITLE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?is)<title[^>]*>(.*?)</title>").unwrap()
-    });
+    static RE_TITLE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?is)<title[^>]*>(.*?)</title>").unwrap());
     RE_TITLE.captures(html).map(|caps| {
         let raw = caps[1].trim().to_string();
         // Decode common entities in title
@@ -231,7 +249,7 @@ pub fn extract_main_content_html(html: &str) -> Result<String> {
         ".docs-content",
         ".doc-content",
         "[data-docs-content]",
-        ".prose",          // Tailwind prose (Next.js docs, etc.)
+        ".prose", // Tailwind prose (Next.js docs, etc.)
         ".article-body",
         // Generic
         "main",
@@ -277,57 +295,102 @@ pub fn extract_main_content_html(html: &str) -> Result<String> {
     static REMOVE_SELECTORS_PARSED: LazyLock<Vec<Selector>> = LazyLock::new(|| {
         [
             // GitHub
-            ".Layout-sidebar", ".file-navigation", ".BorderGrid",
-            ".Layout-sidebar-left", ".Layout-sidebar-right", ".repository-content",
-            ".file-tree", ".js-file-line-container", ".blob-wrapper",
-            ".contributors-wrapper", ".discussion-sidebar",
+            ".Layout-sidebar",
+            ".file-navigation",
+            ".BorderGrid",
+            ".Layout-sidebar-left",
+            ".Layout-sidebar-right",
+            ".repository-content",
+            ".file-tree",
+            ".js-file-line-container",
+            ".blob-wrapper",
+            ".contributors-wrapper",
+            ".discussion-sidebar",
             // Standard non-content
-            "nav", "header", "footer", "aside",
-            ".navigation", ".sidebar", ".menu", ".header", ".footer",
-            "#header", "#footer", "#navigation",
+            "nav",
+            "header",
+            "footer",
+            "aside",
+            ".navigation",
+            ".sidebar",
+            ".menu",
+            ".header",
+            ".footer",
+            "#header",
+            "#footer",
+            "#navigation",
             // Docs-specific sidebars/navs
-            ".docs-sidebar", ".doc-sidebar", ".sidebar-nav",
-            ".toc-sidebar", ".page-sidebar", ".left-sidebar",
-            ".side-nav", ".sidenav",
-            "#sidebar", "#toc",
+            ".docs-sidebar",
+            ".doc-sidebar",
+            ".sidebar-nav",
+            ".toc-sidebar",
+            ".page-sidebar",
+            ".left-sidebar",
+            ".side-nav",
+            ".sidenav",
+            "#sidebar",
+            "#toc",
             // ARIA roles for nav/complementary
-            "[role='navigation']", "[role='complementary']",
+            "[role='navigation']",
+            "[role='complementary']",
             // Table of contents
-            ".toc", ".table-of-contents",
+            ".toc",
+            ".table-of-contents",
             // Skip/accessibility links
-            ".skip-link", ".skip-to-content",
+            ".skip-link",
+            ".skip-to-content",
             // Wikipedia-specific noise
-            ".mw-editsection",   // [edit] links
-            "#mw-panel",         // Left sidebar
-            "#mw-head",          // Top nav
-            ".navbox",           // Navigation boxes at bottom
-            ".catlinks",         // Category links
-            ".mw-indicators",    // Page status indicators
-            ".sistersitebox",    // Sister project links
-            "#p-lang-btn",       // Language button
+            ".mw-editsection",      // [edit] links
+            "#mw-panel",            // Left sidebar
+            "#mw-head",             // Top nav
+            ".navbox",              // Navigation boxes at bottom
+            ".catlinks",            // Category links
+            ".mw-indicators",       // Page status indicators
+            ".sistersitebox",       // Sister project links
+            "#p-lang-btn",          // Language button
             ".vector-page-toolbar", // Page tools
             ".vector-column-start", // Left column nav
             // Cookie/privacy
-            ".cookie-banner", ".cookie-consent", ".cookie-notice",
-            "#cookie-banner", "#cookie-consent",
+            ".cookie-banner",
+            ".cookie-consent",
+            ".cookie-notice",
+            "#cookie-banner",
+            "#cookie-consent",
             // Social/sharing
-            ".share-buttons", ".social-share", ".social-links",
+            ".share-buttons",
+            ".social-share",
+            ".social-links",
             // Ads
-            ".ad", ".advertisement", ".ads",
+            ".ad",
+            ".advertisement",
+            ".ads",
             // Navigation noise
-            ".breadcrumb", ".breadcrumbs",
-            ".search-form", ".search-box",
+            ".breadcrumb",
+            ".breadcrumbs",
+            ".search-form",
+            ".search-box",
             // Modals/overlays
-            ".modal", ".popup", "#modal", ".overlay",
+            ".modal",
+            ".popup",
+            "#modal",
+            ".overlay",
             // Widgets
-            ".widget", "#widget",
+            ".widget",
+            "#widget",
             // Language selectors
-            ".lang-selector", ".language", "#language-selector",
+            ".lang-selector",
+            ".language",
+            "#language-selector",
             // Bars
-            ".top-bar", ".bottom-bar",
-            ".gh-header", "#gh-header",
+            ".top-bar",
+            ".bottom-bar",
+            ".gh-header",
+            "#gh-header",
             // Raw noise elements
-            "script", "style", "noscript", "svg",
+            "script",
+            "style",
+            "noscript",
+            "svg",
         ]
         .iter()
         .filter_map(|s| Selector::parse(s).ok())
@@ -345,10 +408,15 @@ pub fn extract_main_content_html(html: &str) -> Result<String> {
 
     // Also remove with attribute-based selectors (can't be pre-parsed as easily)
     let attr_selectors = [
-        "[class*='cookie']", "[aria-label='breadcrumb']",
-        "[class*='cart']", "[class*='wishlist']", "[class*='account-']",
-        "[class*='sponsored']", "[class*='banner']",
-        "[class*='notification']", "[class*='alert']",
+        "[class*='cookie']",
+        "[aria-label='breadcrumb']",
+        "[class*='cart']",
+        "[class*='wishlist']",
+        "[class*='account-']",
+        "[class*='sponsored']",
+        "[class*='banner']",
+        "[class*='notification']",
+        "[class*='alert']",
     ];
     for selector_str in &attr_selectors {
         if let Ok(selector) = Selector::parse(selector_str) {
@@ -417,21 +485,22 @@ fn safe_parse_html(html: &str) -> String {
         .stack_size(32 * 1024 * 1024) // 32MB stack
         .spawn(move || html2md::parse_html(&html_owned))
         .and_then(|handle| {
-            handle.join().map_err(|_| {
-                std::io::Error::other("html2md thread panicked")
-            })
+            handle
+                .join()
+                .map_err(|_| std::io::Error::other("html2md thread panicked"))
         });
 
     match result {
         Ok(markdown) => markdown,
         Err(e) => {
-            tracing::warn!("html2md failed with large HTML ({}KB): {}", html.len() / 1024, e);
+            tracing::warn!(
+                "html2md failed with large HTML ({}KB): {}",
+                html.len() / 1024,
+                e
+            );
             // Fallback: extract text content without markdown formatting
             let doc = Html::parse_document(html);
-            doc.root_element()
-                .text()
-                .collect::<Vec<_>>()
-                .join(" ")
+            doc.root_element().text().collect::<Vec<_>>().join(" ")
         }
     }
 }
@@ -452,48 +521,55 @@ fn preprocess_html_for_conversion(html: &str, base_url: &str) -> String {
     };
 
     // Resolve <a href="..."> to absolute
-    static RE_HREF: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"(<a\s[^>]*?href\s*=\s*["'])([^"']+)(["'])"#).unwrap()
-    });
-    let result = RE_HREF.replace_all(html, |caps: &regex::Captures| {
-        let prefix = &caps[1];
-        let href = &caps[2];
-        let suffix = &caps[3];
-        if href.starts_with("http://") || href.starts_with("https://") || href.starts_with("data:") || href.starts_with("javascript:") {
-            caps[0].to_string()
-        } else if href.starts_with('#') {
-            // Resolve #anchor to full URL for portability
-            let base_str = base.as_str().split('#').next().unwrap_or(base.as_str());
-            format!("{}{}{}{}", prefix, base_str, href, suffix)
-        } else if href.starts_with("//") {
-            format!("{}https:{}{}", prefix, href, suffix)
-        } else {
-            match base.join(href) {
-                Ok(abs) => format!("{}{}{}", prefix, abs, suffix),
-                Err(_) => caps[0].to_string(),
+    static RE_HREF: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"(<a\s[^>]*?href\s*=\s*["'])([^"']+)(["'])"#).unwrap());
+    let result = RE_HREF
+        .replace_all(html, |caps: &regex::Captures| {
+            let prefix = &caps[1];
+            let href = &caps[2];
+            let suffix = &caps[3];
+            if href.starts_with("http://")
+                || href.starts_with("https://")
+                || href.starts_with("data:")
+                || href.starts_with("javascript:")
+            {
+                caps[0].to_string()
+            } else if href.starts_with('#') {
+                // Resolve #anchor to full URL for portability
+                let base_str = base.as_str().split('#').next().unwrap_or(base.as_str());
+                format!("{}{}{}{}", prefix, base_str, href, suffix)
+            } else if href.starts_with("//") {
+                format!("{}https:{}{}", prefix, href, suffix)
+            } else {
+                match base.join(href) {
+                    Ok(abs) => format!("{}{}{}", prefix, abs, suffix),
+                    Err(_) => caps[0].to_string(),
+                }
             }
-        }
-    }).to_string();
+        })
+        .to_string();
 
     // Resolve <img src="..."> to absolute
-    static RE_IMG_SRC_ATTR: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"(<img\s[^>]*?src\s*=\s*["'])([^"']+)(["'])"#).unwrap()
-    });
-    let result = RE_IMG_SRC_ATTR.replace_all(&result, |caps: &regex::Captures| {
-        let prefix = &caps[1];
-        let src = &caps[2];
-        let suffix = &caps[3];
-        if src.starts_with("http://") || src.starts_with("https://") || src.starts_with("data:") {
-            caps[0].to_string()
-        } else if src.starts_with("//") {
-            format!("{}https:{}{}", prefix, src, suffix)
-        } else {
-            match base.join(src) {
-                Ok(abs) => format!("{}{}{}", prefix, abs, suffix),
-                Err(_) => caps[0].to_string(),
+    static RE_IMG_SRC_ATTR: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"(<img\s[^>]*?src\s*=\s*["'])([^"']+)(["'])"#).unwrap());
+    let result = RE_IMG_SRC_ATTR
+        .replace_all(&result, |caps: &regex::Captures| {
+            let prefix = &caps[1];
+            let src = &caps[2];
+            let suffix = &caps[3];
+            if src.starts_with("http://") || src.starts_with("https://") || src.starts_with("data:")
+            {
+                caps[0].to_string()
+            } else if src.starts_with("//") {
+                format!("{}https:{}{}", prefix, src, suffix)
+            } else {
+                match base.join(src) {
+                    Ok(abs) => format!("{}{}{}", prefix, abs, suffix),
+                    Err(_) => caps[0].to_string(),
+                }
             }
-        }
-    }).to_string();
+        })
+        .to_string();
 
     // Remove gutter/line-number elements from code blocks (Firecrawl technique)
     static RE_GUTTER: LazyLock<Regex> = LazyLock::new(|| {
@@ -508,7 +584,14 @@ fn preprocess_html_for_conversion(html: &str, base_url: &str) -> String {
 /// before markdown conversion. html2md extracts text from these tags, producing
 /// JavaScript/CSS/SVG noise in the output.
 fn strip_non_content_tags(html: &str) -> String {
-    let regexes: &[&Regex] = &[&RE_SCRIPT, &RE_STYLE, &RE_NOSCRIPT, &RE_SVG, &RE_HEAD, &RE_COMMENT];
+    let regexes: &[&Regex] = &[
+        &RE_SCRIPT,
+        &RE_STYLE,
+        &RE_NOSCRIPT,
+        &RE_SVG,
+        &RE_HEAD,
+        &RE_COMMENT,
+    ];
     let mut result = html.to_string();
     for re in regexes {
         result = re.replace_all(&result, "").to_string();
@@ -526,7 +609,10 @@ fn strip_layout_tables(html: &str) -> String {
     // These are almost always layout tables, not data tables
     // Note: (?s) makes . match newlines, .*? is non-greedy
     static RE_LAYOUT_TBL: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"(?s)<table[^>]*(cellpadding|cellspacing|border=["']?0["']?)[^>]*>.*?</table>"#).unwrap()
+        Regex::new(
+            r#"(?s)<table[^>]*(cellpadding|cellspacing|border=["']?0["']?)[^>]*>.*?</table>"#,
+        )
+        .unwrap()
     });
     let layout_table_regex = &*RE_LAYOUT_TBL;
 
@@ -585,9 +671,8 @@ fn strip_excessive_tables(html: &str) -> String {
     }
 
     // Count total bytes inside <table> tags
-    static RE_TABLE_BLOCK: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?is)<table[^>]*>.*?</table>").unwrap()
-    });
+    static RE_TABLE_BLOCK: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?is)<table[^>]*>.*?</table>").unwrap());
 
     let total_table_bytes: usize = RE_TABLE_BLOCK
         .find_iter(html)
@@ -622,11 +707,7 @@ fn strip_excessive_tables(html: &str) -> String {
             } else {
                 // Layout/template table — extract text content only
                 let doc = Html::parse_fragment(table_html);
-                let text: String = doc
-                    .root_element()
-                    .text()
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let text: String = doc.root_element().text().collect::<Vec<_>>().join(" ");
                 let trimmed = text.trim();
                 if trimmed.is_empty() {
                     "\n".to_string()
@@ -725,7 +806,9 @@ fn clean_markdown(markdown: &str) -> String {
     let joined = RE_ESCAPED_TAG.replace_all(&joined, "").to_string();
     let joined = joined.replace("\\ ", " ").replace("\\\\", "");
     let joined = RE_CSS_ROOT.replace_all(&joined, "").to_string();
-    let joined = RE_BASE64_IMG.replace_all(&joined, "$1(data:image-removed)").to_string();
+    let joined = RE_BASE64_IMG
+        .replace_all(&joined, "$1(data:image-removed)")
+        .to_string();
     let joined = RE_EMPTY_LINK.replace_all(&joined, "").to_string();
 
     // Collapse runs of empty list items (nav boilerplate from JS-rendered menus)
@@ -762,14 +845,14 @@ fn clean_markdown(markdown: &str) -> String {
             r"|Suggest (?:changes|edits?)",
             r"|Report (?:an? )?(?:issue|bug)",
             r")\s*$"
-        )).unwrap()
+        ))
+        .unwrap()
     });
     let cleaned = UI_NOISE.replace_all(&joined, "").to_string();
 
     // Remove Wikipedia edit section links: [[edit](url)]
-    static RE_EDIT_LINKS: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\s*\[\[edit\]\([^)]*\)\]").unwrap()
-    });
+    static RE_EDIT_LINKS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\s*\[\[edit\]\([^)]*\)\]").unwrap());
     let cleaned = RE_EDIT_LINKS.replace_all(&cleaned, "").to_string();
 
     // Extract headings trapped inside link text: [### Title ###](url) → ### [Title](url)
@@ -786,15 +869,15 @@ fn clean_markdown(markdown: &str) -> String {
     // Remove leaked JavaScript code (inline scripts that escaped HTML stripping)
     // Handles escaped underscores in variable names (e.g. csell\_token\_map from html2md)
     // \w+(?:\\?\w+)* matches word chars optionally separated by backslash-escaped chars
-    static RE_LEAKED_JS: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?m)^\s*(?:var|let|const)\s+\w+(?:\\?\w+)*\s*=.*$").unwrap()
-    });
+    static RE_LEAKED_JS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?m)^\s*(?:var|let|const)\s+\w+(?:\\?\w+)*\s*=.*$").unwrap());
     let cleaned = RE_LEAKED_JS.replace_all(&cleaned, "").to_string();
 
     // Remove JavaScript-style property assignments (obj.prop = ...; or obj['key'] = ...;)
     // Handles escaped underscores in property names
     static RE_JS_PROP_ASSIGN: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"(?m)^\s*\w+(?:\\?\w+)*(?:\.\w+(?:\\?\w+)*|\[['"][^'"]*['"]\])\s*=\s*.*;\s*$"#).unwrap()
+        Regex::new(r#"(?m)^\s*\w+(?:\\?\w+)*(?:\.\w+(?:\\?\w+)*|\[['"][^'"]*['"]\])\s*=\s*.*;\s*$"#)
+            .unwrap()
     });
     let cleaned = RE_JS_PROP_ASSIGN.replace_all(&cleaned, "").to_string();
 
@@ -805,44 +888,45 @@ fn clean_markdown(markdown: &str) -> String {
     let cleaned = RE_JS_FUNC_CALL.replace_all(&cleaned, "").to_string();
 
     // Strip copyright footer lines (common boilerplate)
-    static RE_COPYRIGHT: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?m)^\s*Copyright\s+©.*$").unwrap()
-    });
+    static RE_COPYRIGHT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?m)^\s*Copyright\s+©.*$").unwrap());
     let cleaned = RE_COPYRIGHT.replace_all(&cleaned, "").to_string();
 
     // Normalize excessive whitespace inside markdown link text: [  text  ](url) → [text](url)
-    static RE_LINK_WHITESPACE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\[\s{2,}([^\]]*?)\s{2,}\]\(").unwrap()
-    });
-    let cleaned = RE_LINK_WHITESPACE.replace_all(&cleaned, "[$1](").to_string();
+    static RE_LINK_WHITESPACE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\[\s{2,}([^\]]*?)\s{2,}\]\(").unwrap());
+    let cleaned = RE_LINK_WHITESPACE
+        .replace_all(&cleaned, "[$1](")
+        .to_string();
 
     // Collapse internal whitespace runs in link text: [  Apple   Apple  ](url)
-    static RE_LINK_INNER_WHITESPACE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\[([^\]]*?)\s{2,}([^\]]*?)\]\(").unwrap()
-    });
+    static RE_LINK_INNER_WHITESPACE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\[([^\]]*?)\s{2,}([^\]]*?)\]\(").unwrap());
     // Apply multiple times since regex doesn't backtrack into replaced text
     let mut cleaned = cleaned;
     for _ in 0..3 {
-        cleaned = RE_LINK_INNER_WHITESPACE.replace_all(&cleaned, "[$1 $2](").to_string();
+        cleaned = RE_LINK_INNER_WHITESPACE
+            .replace_all(&cleaned, "[$1 $2](")
+            .to_string();
     }
 
     // Deduplicate adjacent identical phrases in link text: [Apple Apple](url) → [Apple](url)
-    static RE_LINK_TEXT: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\[([^\]]+)\]\(").unwrap()
-    });
-    let cleaned = RE_LINK_TEXT.replace_all(&cleaned, |caps: &regex::Captures| {
-        let text = caps[1].trim();
-        let words: Vec<&str> = text.split_whitespace().collect();
-        let len = words.len();
-        // Check if text is exactly two identical halves (e.g. "Apple Apple", "HP HP")
-        if len >= 2 && len.is_multiple_of(2) {
-            let half = len / 2;
-            if words[..half] == words[half..] {
-                return format!("[{}](", words[..half].join(" "));
+    static RE_LINK_TEXT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]+)\]\(").unwrap());
+    let cleaned = RE_LINK_TEXT
+        .replace_all(&cleaned, |caps: &regex::Captures| {
+            let text = caps[1].trim();
+            let words: Vec<&str> = text.split_whitespace().collect();
+            let len = words.len();
+            // Check if text is exactly two identical halves (e.g. "Apple Apple", "HP HP")
+            if len >= 2 && len.is_multiple_of(2) {
+                let half = len / 2;
+                if words[..half] == words[half..] {
+                    return format!("[{}](", words[..half].join(" "));
+                }
             }
-        }
-        format!("[{}](", text)
-    }).to_string();
+            format!("[{}](", text)
+        })
+        .to_string();
 
     // Collapse repeated identical list items (3+ in a row) to a single instance
     // e.g., "* Product information page\n\n* Product information page\n\n..."
@@ -876,12 +960,19 @@ fn clean_markdown(markdown: &str) -> String {
         result_lines.join("\n")
     };
 
-    RE_COLLAPSE_NEWLINES.replace_all(&cleaned, "\n\n").to_string()
+    RE_COLLAPSE_NEWLINES
+        .replace_all(&cleaned, "\n\n")
+        .to_string()
 }
 
 /// FIX #3: Remove invisible Unicode characters that waste tokens and break parsers
 fn strip_invisible_unicode(text: &str) -> String {
-    text.replace(['\u{200B}', '\u{FEFF}', '\u{200C}', '\u{200D}', '\u{2060}', '\u{FFFE}'], "") // Invalid BOM
+    text.replace(
+        [
+            '\u{200B}', '\u{FEFF}', '\u{200C}', '\u{200D}', '\u{2060}', '\u{FFFE}',
+        ],
+        "",
+    ) // Invalid BOM
 }
 
 /// FIX #2: Decode HTML entities to save tokens and fix URL parsing
@@ -906,7 +997,6 @@ fn decode_html_entities(text: &str) -> String {
         .replace("&reg;", "\u{00AE}")
         .replace("&trade;", "\u{2122}")
 }
-
 
 /// Clean HTML tags from markdown output
 /// Converts <img> tags to markdown format and removes other HTML
@@ -1005,12 +1095,10 @@ fn clean_html_from_markdown(text: &str) -> String {
     // STEP 3.5: Protect HTML tag names inside markdown link text from being stripped.
     // e.g. [<head>](url) → [`<head>`](url) so the tag survives the cleanup below.
     // Also protects inline content like "the <title> tag" → "the `<title>` tag"
-    static RE_MD_LINK_WITH_TAG: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"\[([^\]]*<[a-zA-Z][a-zA-Z0-9]*[^]]*)\]\(([^)]+)\)").unwrap()
-    });
-    static RE_BARE_HTML_TAG_NAME: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)>").unwrap()
-    });
+    static RE_MD_LINK_WITH_TAG: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\[([^\]]*<[a-zA-Z][a-zA-Z0-9]*[^]]*)\]\(([^)]+)\)").unwrap());
+    static RE_BARE_HTML_TAG_NAME: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)>").unwrap());
     result = RE_MD_LINK_WITH_TAG
         .replace_all(&result, |caps: &regex::Captures| {
             let link_text = &caps[1];
@@ -1030,9 +1118,8 @@ fn clean_html_from_markdown(text: &str) -> String {
     });
     // Tags that TAG_PATTERNS converts to markdown formatting — don't protect these
     static FORMATTING_TAGS: &[&str] = &[
-        "em", "strong", "b", "i", "u", "s", "code", "kbd", "samp", "var",
-        "mark", "small", "sup", "sub", "abbr", "cite", "dfn", "time", "data",
-        "del", "ins", "q",
+        "em", "strong", "b", "i", "u", "s", "code", "kbd", "samp", "var", "mark", "small", "sup",
+        "sub", "abbr", "cite", "dfn", "time", "data", "del", "ins", "q",
     ];
     // Apply twice to catch adjacent tags (first pass consumes trailing context char)
     for _ in 0..2 {
@@ -1042,7 +1129,8 @@ fn clean_html_from_markdown(text: &str) -> String {
                 let tag = &caps[2];
                 let post = &caps[3];
                 // Extract tag name (strip < / >)
-                let tag_name = tag.trim_start_matches('<')
+                let tag_name = tag
+                    .trim_start_matches('<')
                     .trim_start_matches('/')
                     .trim_end_matches('>')
                     .to_lowercase();
@@ -1145,7 +1233,10 @@ fn clean_html_from_markdown(text: &str) -> String {
             (Regex::new(r"</?dialog[^>]*?>").unwrap(), ""),
             (Regex::new(r"(?is)<script[^>]*?>.*?</script>").unwrap(), ""),
             (Regex::new(r"(?is)<style[^>]*?>.*?</style>").unwrap(), ""),
-            (Regex::new(r"(?is)<noscript[^>]*?>.*?</noscript>").unwrap(), ""),
+            (
+                Regex::new(r"(?is)<noscript[^>]*?>.*?</noscript>").unwrap(),
+                "",
+            ),
             (Regex::new(r"(?is)<!--.*?-->").unwrap(), ""),
             (Regex::new(r"(?is)<!\[CDATA\[.*?\]\]>").unwrap(), ""),
             (Regex::new(r"(?is)<\?xml[^>]*?\?>").unwrap(), ""),
@@ -1164,7 +1255,10 @@ fn clean_html_from_markdown(text: &str) -> String {
             (Regex::new(r"(?is)<object[^>]*?>.*?</object>").unwrap(), ""),
             (Regex::new(r"<embed[^>]*?/?>").unwrap(), ""),
             (Regex::new(r"</?param[^>]*?>").unwrap(), ""),
-            (Regex::new(r"(?is)<template[^>]*?>.*?</template>").unwrap(), ""),
+            (
+                Regex::new(r"(?is)<template[^>]*?>.*?</template>").unwrap(),
+                "",
+            ),
             (Regex::new(r"</?slot[^>]*?>").unwrap(), ""),
         ]
     });
@@ -1175,9 +1269,8 @@ fn clean_html_from_markdown(text: &str) -> String {
 
     // Before catchall: convert remaining bare HTML element references to backtick code
     // e.g. "the <title> tag" → "the `<title>` tag". Only simple tags with no attributes.
-    static RE_BARE_ELEMENT: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(</?[a-zA-Z][a-zA-Z0-9]*>)").unwrap()
-    });
+    static RE_BARE_ELEMENT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(</?[a-zA-Z][a-zA-Z0-9]*>)").unwrap());
     result = RE_BARE_ELEMENT.replace_all(&result, "`$1`").to_string();
 
     // Catchall: remove any remaining HTML tags (those with attributes)
@@ -1242,10 +1335,22 @@ fn escape_multiline_links(markdown: &str) -> String {
 fn remove_accessibility_links(markdown: &str) -> String {
     static SKIP_LINKS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         vec![
-            Regex::new(r"(?mi)^\s*\[Skip to (Content|Main|Navigation|Footer|Top|Bottom)\]\([^)]*\)\s*").unwrap(),
-            Regex::new(r"(?mi)^\s*\[Jump to (Content|Main|Navigation|Footer|Top|Bottom)\]\([^)]*\)\s*").unwrap(),
-            Regex::new(r"(?mi)^\s*\[Go to (Content|Main|Navigation|Footer|Top|Bottom)\]\([^)]*\)\s*").unwrap(),
-            Regex::new(r"(?mi)^\s*\[Skip (navigation|nav|to main content|to content)\]\([^)]*\)\s*").unwrap(),
+            Regex::new(
+                r"(?mi)^\s*\[Skip to (Content|Main|Navigation|Footer|Top|Bottom)\]\([^)]*\)\s*",
+            )
+            .unwrap(),
+            Regex::new(
+                r"(?mi)^\s*\[Jump to (Content|Main|Navigation|Footer|Top|Bottom)\]\([^)]*\)\s*",
+            )
+            .unwrap(),
+            Regex::new(
+                r"(?mi)^\s*\[Go to (Content|Main|Navigation|Footer|Top|Bottom)\]\([^)]*\)\s*",
+            )
+            .unwrap(),
+            Regex::new(
+                r"(?mi)^\s*\[Skip (navigation|nav|to main content|to content)\]\([^)]*\)\s*",
+            )
+            .unwrap(),
             Regex::new(r"(?mi)^\s*\[Back to (Top|Main|Content)\]\([^)]*\)\s*").unwrap(),
         ]
     });
@@ -1292,9 +1397,7 @@ fn convert_urls_to_absolute(markdown: &str, base_url: &str) -> Result<String> {
             let url = &caps[2];
 
             // Skip if already absolute or data URI
-            if url.starts_with("http://")
-                || url.starts_with("https://")
-                || url.starts_with("data:")
+            if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("data:")
             {
                 return caps[0].to_string();
             }
@@ -1572,9 +1675,18 @@ mod tests {
         let result = html_to_markdown(html, "https://example.com", false).unwrap();
         assert!(result.contains("Product Listing"));
         assert!(result.contains("Buy the best laptops"));
-        assert!(!result.contains("$ssgST"), "Inline JS should be stripped before markdown conversion");
-        assert!(!result.contains("analytics_data"), "Head scripts should be stripped");
-        assert!(!result.contains("function init"), "Script functions should not appear in output");
+        assert!(
+            !result.contains("$ssgST"),
+            "Inline JS should be stripped before markdown conversion"
+        );
+        assert!(
+            !result.contains("analytics_data"),
+            "Head scripts should be stripped"
+        );
+        assert!(
+            !result.contains("function init"),
+            "Script functions should not appear in output"
+        );
     }
 
     #[test]
@@ -1840,12 +1952,24 @@ Also test standalone: <!DOCTYPE html> and <?xml version="1.0"?>
         let result = clean_html_from_markdown(input);
 
         // Standalone HTML outside code fences should be removed
-        assert!(!result.contains("Also test standalone: <!DOCTYPE html>"), "Standalone DOCTYPE should be removed");
-        assert!(!result.contains("<?xml"), "Standalone XML declaration should be removed");
+        assert!(
+            !result.contains("Also test standalone: <!DOCTYPE html>"),
+            "Standalone DOCTYPE should be removed"
+        );
+        assert!(
+            !result.contains("<?xml"),
+            "Standalone XML declaration should be removed"
+        );
 
         // Code fence content should be PRESERVED (not stripped)
-        assert!(result.contains("<!DOCTYPE html>"), "DOCTYPE inside code fence should be preserved");
-        assert!(result.contains("<![CDATA["), "CDATA inside code fence should be preserved");
+        assert!(
+            result.contains("<!DOCTYPE html>"),
+            "DOCTYPE inside code fence should be preserved"
+        );
+        assert!(
+            result.contains("<![CDATA["),
+            "CDATA inside code fence should be preserved"
+        );
 
         // Should preserve the actual content
         assert!(result.contains("Example API response"));
@@ -1915,10 +2039,22 @@ Also test standalone: <!DOCTYPE html> and <?xml version="1.0"?>
         assert!(!result.contains("<em"));
         assert!(!result.contains("<mark"));
         assert!(!result.contains("<code"));
-        assert!(result.contains("**Bold**"), "Expected **Bold**, got: {}", result);
-        assert!(result.contains("_italic_"), "Expected _italic_, got: {}", result);
+        assert!(
+            result.contains("**Bold**"),
+            "Expected **Bold**, got: {}",
+            result
+        );
+        assert!(
+            result.contains("_italic_"),
+            "Expected _italic_, got: {}",
+            result
+        );
         assert!(result.contains("highlight"));
-        assert!(result.contains("`code`"), "Expected `code`, got: {}", result);
+        assert!(
+            result.contains("`code`"),
+            "Expected `code`, got: {}",
+            result
+        );
     }
 
     // FIX #6: Test missing structural HTML tag removal
@@ -2284,8 +2420,7 @@ Also test standalone: <!DOCTYPE html> and <?xml version="1.0"?>
     #[test]
     fn test_complex_relative_paths() {
         let md = "![](../../assets/img.jpg)";
-        let result =
-            convert_urls_to_absolute(md, "https://example.com/a/b/c/page.html").unwrap();
+        let result = convert_urls_to_absolute(md, "https://example.com/a/b/c/page.html").unwrap();
 
         assert_eq!(result, "![](https://example.com/a/assets/img.jpg)");
     }
@@ -2311,10 +2446,7 @@ Also test standalone: <!DOCTYPE html> and <?xml version="1.0"?>
         let md = "[API](../api/v1?foo=bar&baz=qux)";
         let result = convert_urls_to_absolute(md, "https://example.com/docs/page.html").unwrap();
 
-        assert_eq!(
-            result,
-            "[API](https://example.com/api/v1?foo=bar&baz=qux)"
-        );
+        assert_eq!(result, "[API](https://example.com/api/v1?foo=bar&baz=qux)");
     }
 
     #[test]
@@ -2378,7 +2510,10 @@ Also test standalone: <!DOCTYPE html> and <?xml version="1.0"?>
         let md = "[Link](path%20with%20spaces.html)";
         let result = convert_urls_to_absolute(md, "https://example.com/").unwrap();
 
-        assert_eq!(result, "[Link](https://example.com/path%20with%20spaces.html)");
+        assert_eq!(
+            result,
+            "[Link](https://example.com/path%20with%20spaces.html)"
+        );
     }
 
     // NEW: Tests for escape_multiline_links
@@ -2601,16 +2736,25 @@ link text</a>.</p>
         eprintln!("Result markdown:\n{}", result);
 
         // Should pick largest from first srcset
-        assert!(result.contains("![Responsive](https://cdn.example.com/img-1600.jpg)") ||
-                result.contains("img-1600.jpg"), "Expected to find img-1600.jpg in output");
+        assert!(
+            result.contains("![Responsive](https://cdn.example.com/img-1600.jpg)")
+                || result.contains("img-1600.jpg"),
+            "Expected to find img-1600.jpg in output"
+        );
 
         // Should pick largest retina version
-        assert!(result.contains("![Retina](https://cdn.example.com/icon@3x.png)") ||
-                result.contains("icon@3x.png"), "Expected to find icon@3x.png in output");
+        assert!(
+            result.contains("![Retina](https://cdn.example.com/icon@3x.png)")
+                || result.contains("icon@3x.png"),
+            "Expected to find icon@3x.png in output"
+        );
 
         // Should keep regular image unchanged
-        assert!(result.contains("![Normal](https://cdn.example.com/regular.jpg)") ||
-                result.contains("regular.jpg"), "Expected to find regular.jpg in output");
+        assert!(
+            result.contains("![Normal](https://cdn.example.com/regular.jpg)")
+                || result.contains("regular.jpg"),
+            "Expected to find regular.jpg in output"
+        );
     }
 
     #[test]
@@ -2667,7 +2811,11 @@ link text</a>.</p>
     fn test_setext_h1_to_atx() {
         let md = "Title\n=====\n\nContent";
         let cleaned = clean_markdown(md);
-        assert!(cleaned.contains("# Title"), "Expected ATX h1, got: {}", cleaned);
+        assert!(
+            cleaned.contains("# Title"),
+            "Expected ATX h1, got: {}",
+            cleaned
+        );
         assert!(!cleaned.contains("====="));
     }
 
@@ -2675,7 +2823,11 @@ link text</a>.</p>
     fn test_setext_h2_to_atx() {
         let md = "Subtitle\n--------\n\nContent";
         let cleaned = clean_markdown(md);
-        assert!(cleaned.contains("## Subtitle"), "Expected ATX h2, got: {}", cleaned);
+        assert!(
+            cleaned.contains("## Subtitle"),
+            "Expected ATX h2, got: {}",
+            cleaned
+        );
         assert!(!cleaned.contains("--------"));
     }
 
@@ -2724,7 +2876,11 @@ link text</a>.</p>
     fn test_json_object_detection() {
         let json = r#"{"name": "test", "value": 42}"#;
         let result = html_to_markdown(json, "https://example.com", false).unwrap();
-        assert!(result.contains("# JSON Response"), "Expected heading, got: {}", result);
+        assert!(
+            result.contains("# JSON Response"),
+            "Expected heading, got: {}",
+            result
+        );
         assert!(result.contains("```json\n"));
         assert!(result.ends_with("\n```"));
         assert!(result.contains(r#""name": "test""#));
@@ -2791,8 +2947,14 @@ link text</a>.</p>
         "#;
         let result = extract_main_content_html(html).unwrap();
         // The modal and overlay elements should be removed
-        assert!(!result.contains("Sign up now"), "Modal content should be removed");
-        assert!(!result.contains("Overlay content"), "Overlay content should be removed");
+        assert!(
+            !result.contains("Sign up now"),
+            "Modal content should be removed"
+        );
+        assert!(
+            !result.contains("Overlay content"),
+            "Overlay content should be removed"
+        );
         // Main content should remain
         assert!(result.contains("Main Page Title"));
         assert!(result.contains("main content of the page"));
@@ -2803,8 +2965,14 @@ link text</a>.</p>
     fn test_escaped_html_tag_removal() {
         let md = r#"Content \<style\> \</style\> more text \</a\> end"#;
         let cleaned = clean_markdown(md);
-        assert!(!cleaned.contains(r"\<style\>"), "Escaped style tag should be removed");
-        assert!(!cleaned.contains(r"\</a\>"), "Escaped closing tag should be removed");
+        assert!(
+            !cleaned.contains(r"\<style\>"),
+            "Escaped style tag should be removed"
+        );
+        assert!(
+            !cleaned.contains(r"\</a\>"),
+            "Escaped closing tag should be removed"
+        );
         assert!(cleaned.contains("Content"));
         assert!(cleaned.contains("more text"));
         assert!(cleaned.contains("end"));
@@ -2814,7 +2982,10 @@ link text</a>.</p>
     fn test_escaped_html_comment_removal() {
         let md = r#"Before \<!-- comment --\> After"#;
         let cleaned = clean_markdown(md);
-        assert!(!cleaned.contains("comment"), "Escaped comment should be removed");
+        assert!(
+            !cleaned.contains("comment"),
+            "Escaped comment should be removed"
+        );
         assert!(cleaned.contains("Before"));
         assert!(cleaned.contains("After"));
     }
@@ -2824,7 +2995,11 @@ link text</a>.</p>
         // Normal < usage in content should not be affected
         let md = "The value is a < b and 5 > 3";
         let cleaned = clean_markdown(md);
-        assert!(cleaned.contains("a < b"), "Normal < should be preserved: {}", cleaned);
+        assert!(
+            cleaned.contains("a < b"),
+            "Normal < should be preserved: {}",
+            cleaned
+        );
     }
 
     // NEW: Test code fence protection from HTML stripping
@@ -2833,8 +3008,16 @@ link text</a>.</p>
         let md = "Some text\n\n```html\n<div class=\"container\">\n  <p>Hello</p>\n</div>\n```\n\nMore text";
         let result = clean_html_from_markdown(md);
         // HTML inside code fences should be preserved
-        assert!(result.contains("<div class=\"container\">"), "HTML in code fence should be preserved: {}", result);
-        assert!(result.contains("<p>Hello</p>"), "HTML tags in code fence should be preserved: {}", result);
+        assert!(
+            result.contains("<div class=\"container\">"),
+            "HTML in code fence should be preserved: {}",
+            result
+        );
+        assert!(
+            result.contains("<p>Hello</p>"),
+            "HTML tags in code fence should be preserved: {}",
+            result
+        );
         // Text outside code fences should still be cleaned
         assert!(result.contains("Some text"));
         assert!(result.contains("More text"));
@@ -2845,12 +3028,21 @@ link text</a>.</p>
         let md = "Text\n\n```html\n<strong>bold</strong>\n```\n\nMiddle <div>removed</div>\n\n```js\nconst x = '<span>test</span>';\n```\n\nEnd";
         let result = clean_html_from_markdown(md);
         // First code fence: HTML preserved
-        assert!(result.contains("<strong>bold</strong>"), "HTML in first code fence preserved");
+        assert!(
+            result.contains("<strong>bold</strong>"),
+            "HTML in first code fence preserved"
+        );
         // Outside code fence: HTML stripped
-        assert!(!result.contains("<div>removed</div>"), "HTML outside code fence should be stripped");
+        assert!(
+            !result.contains("<div>removed</div>"),
+            "HTML outside code fence should be stripped"
+        );
         assert!(result.contains("removed"));
         // Second code fence: HTML preserved
-        assert!(result.contains("<span>test</span>"), "HTML in second code fence preserved");
+        assert!(
+            result.contains("<span>test</span>"),
+            "HTML in second code fence preserved"
+        );
     }
 
     // NEW: Test inline formatting conversion
@@ -2858,30 +3050,54 @@ link text</a>.</p>
     fn test_inline_bold_conversion() {
         let html = "<strong>important</strong> text <b>also bold</b>";
         let result = clean_html_from_markdown(html);
-        assert!(result.contains("**important**"), "Expected **important**, got: {}", result);
-        assert!(result.contains("**also bold**"), "Expected **also bold**, got: {}", result);
+        assert!(
+            result.contains("**important**"),
+            "Expected **important**, got: {}",
+            result
+        );
+        assert!(
+            result.contains("**also bold**"),
+            "Expected **also bold**, got: {}",
+            result
+        );
     }
 
     #[test]
     fn test_inline_italic_conversion() {
         let html = "<em>emphasized</em> text <i>also italic</i>";
         let result = clean_html_from_markdown(html);
-        assert!(result.contains("_emphasized_"), "Expected _emphasized_, got: {}", result);
-        assert!(result.contains("_also italic_"), "Expected _also italic_, got: {}", result);
+        assert!(
+            result.contains("_emphasized_"),
+            "Expected _emphasized_, got: {}",
+            result
+        );
+        assert!(
+            result.contains("_also italic_"),
+            "Expected _also italic_, got: {}",
+            result
+        );
     }
 
     #[test]
     fn test_inline_code_conversion() {
         let html = "Use <code>console.log()</code> for debugging";
         let result = clean_html_from_markdown(html);
-        assert!(result.contains("`console.log()`"), "Expected `console.log()`, got: {}", result);
+        assert!(
+            result.contains("`console.log()`"),
+            "Expected `console.log()`, got: {}",
+            result
+        );
     }
 
     #[test]
     fn test_pre_code_language_detection() {
         let html = r#"<pre><code class="language-rust">fn main() {}</code></pre>"#;
         let result = clean_html_from_markdown(html);
-        assert!(result.contains("```rust"), "Expected ```rust, got: {}", result);
+        assert!(
+            result.contains("```rust"),
+            "Expected ```rust, got: {}",
+            result
+        );
         assert!(result.contains("fn main() {}"), "Expected code content");
     }
 
@@ -2889,21 +3105,33 @@ link text</a>.</p>
     fn test_pre_code_lang_prefix() {
         let html = r#"<pre><code class="lang-python">print("hello")</code></pre>"#;
         let result = clean_html_from_markdown(html);
-        assert!(result.contains("```python"), "Expected ```python, got: {}", result);
+        assert!(
+            result.contains("```python"),
+            "Expected ```python, got: {}",
+            result
+        );
     }
 
     #[test]
     fn test_pre_code_highlight_prefix() {
         let html = r#"<pre><code class="highlight-javascript">const x = 1;</code></pre>"#;
         let result = clean_html_from_markdown(html);
-        assert!(result.contains("```javascript"), "Expected ```javascript, got: {}", result);
+        assert!(
+            result.contains("```javascript"),
+            "Expected ```javascript, got: {}",
+            result
+        );
     }
 
     #[test]
     fn test_anchor_to_markdown_link() {
         let html = r#"Visit <a href="https://example.com">Example</a> for details."#;
         let result = clean_html_from_markdown(html);
-        assert!(result.contains("[Example](https://example.com)"), "Expected markdown link, got: {}", result);
+        assert!(
+            result.contains("[Example](https://example.com)"),
+            "Expected markdown link, got: {}",
+            result
+        );
     }
 
     #[test]
@@ -2918,8 +3146,16 @@ link text</a>.</p>
     fn test_preprocess_resolves_relative_urls() {
         let html = r#"<a href="/about">About</a> <img src="/logo.png">"#;
         let result = preprocess_html_for_conversion(html, "https://example.com");
-        assert!(result.contains("https://example.com/about"), "Expected absolute href, got: {}", result);
-        assert!(result.contains("https://example.com/logo.png"), "Expected absolute src, got: {}", result);
+        assert!(
+            result.contains("https://example.com/about"),
+            "Expected absolute href, got: {}",
+            result
+        );
+        assert!(
+            result.contains("https://example.com/logo.png"),
+            "Expected absolute src, got: {}",
+            result
+        );
     }
 
     #[test]
@@ -2931,9 +3167,14 @@ link text</a>.</p>
 
     #[test]
     fn test_preprocess_strips_gutter_elements() {
-        let html = r#"<pre><td class="gutter"><span>1</span></td><td class="code">let x = 1;</td></pre>"#;
+        let html =
+            r#"<pre><td class="gutter"><span>1</span></td><td class="code">let x = 1;</td></pre>"#;
         let result = preprocess_html_for_conversion(html, "https://example.com");
-        assert!(!result.contains("gutter"), "Gutter should be stripped, got: {}", result);
+        assert!(
+            !result.contains("gutter"),
+            "Gutter should be stripped, got: {}",
+            result
+        );
         assert!(result.contains("let x = 1;"));
     }
 
@@ -2961,14 +3202,22 @@ link text</a>.</p>
     fn test_link_whitespace_normalization() {
         let md = "[   Apple   ](https://example.com)";
         let cleaned = clean_markdown(md);
-        assert!(cleaned.contains("[Apple](https://example.com)"), "Got: {}", cleaned);
+        assert!(
+            cleaned.contains("[Apple](https://example.com)"),
+            "Got: {}",
+            cleaned
+        );
     }
 
     #[test]
     fn test_link_text_deduplication() {
         let md = "[Apple Apple](https://example.com)";
         let cleaned = clean_markdown(md);
-        assert!(cleaned.contains("[Apple](https://example.com)"), "Got: {}", cleaned);
+        assert!(
+            cleaned.contains("[Apple](https://example.com)"),
+            "Got: {}",
+            cleaned
+        );
     }
 
     #[test]
@@ -2976,7 +3225,11 @@ link text</a>.</p>
         // Multi-word dedup: [New York New York] → [New York]
         let md = "[New York New York](https://example.com)";
         let cleaned = clean_markdown(md);
-        assert!(cleaned.contains("[New York](https://example.com)"), "Got: {}", cleaned);
+        assert!(
+            cleaned.contains("[New York](https://example.com)"),
+            "Got: {}",
+            cleaned
+        );
     }
 
     #[test]
@@ -2984,7 +3237,11 @@ link text</a>.</p>
         // Don't dedup when halves are different
         let md = "[Apple Samsung](https://example.com)";
         let cleaned = clean_markdown(md);
-        assert!(cleaned.contains("[Apple Samsung](https://example.com)"), "Got: {}", cleaned);
+        assert!(
+            cleaned.contains("[Apple Samsung](https://example.com)"),
+            "Got: {}",
+            cleaned
+        );
     }
 
     #[test]
@@ -2993,6 +3250,11 @@ link text</a>.</p>
         let cleaned = clean_markdown(md);
         // Should collapse to at most 2 instances
         let count = cleaned.matches("Product info page").count();
-        assert!(count <= 2, "Expected <= 2 occurrences but got {}: {}", count, cleaned);
+        assert!(
+            count <= 2,
+            "Expected <= 2 occurrences but got {}: {}",
+            count,
+            cleaned
+        );
     }
 }

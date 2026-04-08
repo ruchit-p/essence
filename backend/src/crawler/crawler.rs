@@ -47,7 +47,8 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
     let mut url_depths: HashMap<String, u32> = HashMap::new();
 
     // Add normalized base URL to priority queue
-    let base_prioritized_url = PrioritizedUrl::new(normalized_base_url.clone(), 0, &url_prioritizer);
+    let base_prioritized_url =
+        PrioritizedUrl::new(normalized_base_url.clone(), 0, &url_prioritizer);
     queue.push(base_prioritized_url);
     url_depths.insert(normalized_base_url.clone(), 0);
 
@@ -156,7 +157,6 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
         // Mark as visited (URL is already normalized from queue)
         visited.insert(current_url.clone());
 
-
         // Apply rate limiting before scraping
         if let Err(e) = rate_limiter.wait_for_permission(&current_url).await {
             warn!("Rate limiter error for {}: {}", current_url, e);
@@ -177,10 +177,19 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
         // Scrape with retry for transient errors
         let mut scrape_result = scrape_url(&current_url, &engine, &config, engine_mode).await;
         for retry in 0..2 {
-            if scrape_result.is_ok() || !scrape_result.as_ref().err().is_some_and(|e| e.is_transient()) {
+            if scrape_result.is_ok()
+                || !scrape_result
+                    .as_ref()
+                    .err()
+                    .is_some_and(|e| e.is_transient())
+            {
                 break;
             }
-            tracing::debug!("Retrying transient error for {} (attempt {})", current_url, retry + 2);
+            tracing::debug!(
+                "Retrying transient error for {} (attempt {})",
+                current_url,
+                retry + 2
+            );
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             scrape_result = scrape_url(&current_url, &engine, &config, engine_mode).await;
         }
@@ -204,15 +213,16 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
                                 if !visited.contains(&normalized_link)
                                     && !url_depths.contains_key(&normalized_link)
                                     && is_same_domain(&normalized_link, &normalized_base_url)
-                                    && queue.len() < config.max_queue_size {
-                                        let prioritized_link = PrioritizedUrl::new(
-                                            normalized_link.clone(),
-                                            current_depth + 1,
-                                            &url_prioritizer,
-                                        );
-                                        queue.push(prioritized_link);
-                                        url_depths.insert(normalized_link, current_depth + 1);
-                                    }
+                                    && queue.len() < config.max_queue_size
+                                {
+                                    let prioritized_link = PrioritizedUrl::new(
+                                        normalized_link.clone(),
+                                        current_depth + 1,
+                                        &url_prioritizer,
+                                    );
+                                    queue.push(prioritized_link);
+                                    url_depths.insert(normalized_link, current_depth + 1);
+                                }
                             }
                         }
                         continue;
@@ -280,7 +290,9 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
                         }
 
                         // Skip if this is a pagination link (already processed)
-                        if pagination_links.contains(&link) || pagination_links.contains(&normalized_link) {
+                        if pagination_links.contains(&link)
+                            || pagination_links.contains(&normalized_link)
+                        {
                             continue;
                         }
 
@@ -309,8 +321,9 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<Vec<Document>> {
                             }
 
                             // Apply backpressure: when queue is at threshold, skip secondary links
-                            let backpressure_limit =
-                                (config.max_queue_size * config.backpressure_threshold as usize) / 100;
+                            let backpressure_limit = (config.max_queue_size
+                                * config.backpressure_threshold as usize)
+                                / 100;
                             if queue.len() >= backpressure_limit {
                                 debug!(
                                     "Queue at backpressure threshold ({}/{}), slowing link discovery",
@@ -394,7 +407,12 @@ async fn check_robots_txt(url: &str, ignore_sitemap: Option<bool>) -> bool {
 }
 
 /// Scrape a single URL and extract links
-async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engine_mode: &str) -> Result<(Document, Vec<String>, String)> {
+async fn scrape_url(
+    url: &str,
+    engine: &HttpEngine,
+    config: &CrawlerConfig,
+    engine_mode: &str,
+) -> Result<(Document, Vec<String>, String)> {
     // Create a scrape request
     let scrape_request = ScrapeRequest {
         url: url.to_string(),
@@ -420,10 +438,17 @@ async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engi
     // Check if the HTTP result has thin content and we should try browser fallback
     if engine_mode == "auto" {
         let html_text_len = scraper::Html::parse_document(&raw_result.html)
-            .root_element().text().collect::<String>().trim().len();
+            .root_element()
+            .text()
+            .collect::<String>()
+            .trim()
+            .len();
 
         if html_text_len < 100 {
-            debug!("Thin content detected ({} chars) for {}, trying browser fallback", html_text_len, url);
+            debug!(
+                "Thin content detected ({} chars) for {}, trying browser fallback",
+                html_text_len, url
+            );
 
             let fallback_request = ScrapeRequest {
                 url: url.to_string(),
@@ -445,7 +470,9 @@ async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engi
 
             if let Ok(response) = scrape_core_logic(&fallback_request).await {
                 if let Some(doc) = response.data {
-                    let has_good_content = doc.markdown.as_ref()
+                    let has_good_content = doc
+                        .markdown
+                        .as_ref()
                         .map(|md| md.len() > 100)
                         .unwrap_or(false);
 
@@ -669,10 +696,8 @@ mod tests {
         let links = extract_links(html, "https://example.com").unwrap();
 
         // Count how many times each normalized URL appears
-        let mut normalized_links: Vec<String> = links
-            .iter()
-            .map(|link| normalize_url(link))
-            .collect();
+        let mut normalized_links: Vec<String> =
+            links.iter().map(|link| normalize_url(link)).collect();
         normalized_links.sort();
         normalized_links.dedup();
 

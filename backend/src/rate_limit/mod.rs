@@ -32,8 +32,8 @@ pub struct ApiKeyRateLimiter {
 impl ApiKeyRateLimiter {
     /// Create a new API key rate limiter
     pub fn new(default_per_minute: u32, api_key_limits: HashMap<String, u32>) -> Self {
-        let default_limit = NonZeroU32::new(default_per_minute)
-            .unwrap_or_else(|| NonZeroU32::new(60).unwrap());
+        let default_limit =
+            NonZeroU32::new(default_per_minute).unwrap_or_else(|| NonZeroU32::new(60).unwrap());
 
         let mut limits_map = HashMap::new();
         for (key, limit) in api_key_limits {
@@ -52,14 +52,20 @@ impl ApiKeyRateLimiter {
     /// Check rate limit for a specific API key
     pub async fn check_limit(&self, api_key: &str) -> Result<(), RateLimitError> {
         let limiter = self.get_or_create_limiter(api_key).await;
-        
+
         match limiter.check() {
             Ok(_) => {
-                debug!("Rate limit check passed for API key: {}", Self::redact_key(api_key));
+                debug!(
+                    "Rate limit check passed for API key: {}",
+                    Self::redact_key(api_key)
+                );
                 Ok(())
             }
             Err(_) => {
-                debug!("Rate limit exceeded for API key: {}", Self::redact_key(api_key));
+                debug!(
+                    "Rate limit exceeded for API key: {}",
+                    Self::redact_key(api_key)
+                );
                 Err(RateLimitError::Exceeded)
             }
         }

@@ -35,11 +35,8 @@ pub async fn process_scrape_result(
     for format in &request.formats {
         match format.as_str() {
             "markdown" => {
-                let markdown_content = markdown::html_to_markdown(
-                    &raw.html,
-                    &raw.url,
-                    request.only_main_content,
-                )?;
+                let markdown_content =
+                    markdown::html_to_markdown(&raw.html, &raw.url, request.only_main_content)?;
 
                 // Validate content quality
                 if let Err(e) = validate_scrape_quality(&raw, &markdown_content) {

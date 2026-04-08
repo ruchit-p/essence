@@ -72,14 +72,18 @@ impl RenderingDetector {
         // Require strong evidence before declaring JS rendering needed.
         // A single weak signal (e.g., framework detected but content is present) is not enough.
         // True SPAs have minimal content (<100 chars) — that's the strongest signal.
-        let has_minimal = reasons.iter().any(|r| r.contains("Minimal initial content"));
+        let has_minimal = reasons
+            .iter()
+            .any(|r| r.contains("Minimal initial content"));
         let strong_signal_count = detected_frameworks.len() + reasons.len();
-        let needs_js = has_minimal
-            || (strong_signal_count >= 3 && content_script_ratio < 0.3);
+        let needs_js = has_minimal || (strong_signal_count >= 3 && content_script_ratio < 0.3);
         let reason = if needs_js {
             reasons.join("; ")
         } else if !reasons.is_empty() || !detected_frameworks.is_empty() {
-            format!("Signals detected but insufficient to trigger browser: {}", reasons.join("; "))
+            format!(
+                "Signals detected but insufficient to trigger browser: {}",
+                reasons.join("; ")
+            )
         } else {
             "Static content with sufficient initial HTML".to_string()
         };
@@ -175,11 +179,7 @@ impl RenderingDetector {
         // Excluded: loading="lazy", data-src, data-original — these are standard
         // image optimization attributes present on virtually every modern site and
         // do NOT indicate that JavaScript rendering is needed for text content.
-        let lazy_patterns = vec![
-            "data-lazy",
-            "lazy-load",
-            "data-lazy-src",
-        ];
+        let lazy_patterns = vec!["data-lazy", "lazy-load", "data-lazy-src"];
 
         for pattern in lazy_patterns {
             if html.contains(pattern) {
@@ -238,7 +238,7 @@ impl RenderingDetector {
             for element in document.select(&selector) {
                 let script_text = element.text().collect::<String>();
                 script_size += script_text.len();
-                
+
                 // Also count inline scripts from src length estimation
                 if let Some(src) = element.value().attr("src") {
                     script_size += src.len() * 10; // Estimate external script impact
@@ -253,7 +253,7 @@ impl RenderingDetector {
             .collect::<String>()
             .trim()
             .to_string();
-        
+
         let content_size = body_text.len();
 
         if script_size == 0 {
@@ -299,11 +299,7 @@ impl RenderingDetector {
         // Only markers indicating client-side hydration is incomplete/needed.
         // Excluded: __NEXT_DATA__, __NUXT__, data-server-rendered — these prove
         // content IS server-rendered (SSR), meaning HTTP already has the content.
-        let hydration_markers = vec![
-            "data-reactid",
-            "data-react-checksum",
-            "data-hydrate",
-        ];
+        let hydration_markers = vec!["data-reactid", "data-react-checksum", "data-hydrate"];
 
         for marker in hydration_markers {
             if html.contains(marker) {
@@ -317,20 +313,23 @@ impl RenderingDetector {
     /// Get a detailed analysis report
     pub fn analyze_page(html: &str, url: &str) -> String {
         let result = Self::needs_javascript(html, url);
-        
+
         let mut report = String::new();
         report.push_str(&format!("URL: {}\n", url));
         report.push_str(&format!("Needs JavaScript: {}\n", result.needs_js));
         report.push_str(&format!("Reason: {}\n", result.reason));
-        report.push_str(&format!("Content/Script Ratio: {:.2}\n", result.content_script_ratio));
-        
+        report.push_str(&format!(
+            "Content/Script Ratio: {:.2}\n",
+            result.content_script_ratio
+        ));
+
         if !result.detected_frameworks.is_empty() {
             report.push_str(&format!(
                 "Detected Frameworks: {}\n",
                 result.detected_frameworks.join(", ")
             ));
         }
-        
+
         report
     }
 }

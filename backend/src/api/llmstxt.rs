@@ -30,9 +30,7 @@ pub async fn llmstxt_handler(
 }
 
 /// Core logic for generating llms.txt, callable from both API handler and MCP.
-pub async fn llmstxt_core_logic(
-    request: &LlmsTxtRequest,
-) -> Result<LlmsTxtResponse, ScrapeError> {
+pub async fn llmstxt_core_logic(request: &LlmsTxtRequest) -> Result<LlmsTxtResponse, ScrapeError> {
     info!(
         "llms.txt generation requested for URL: {} (max_urls: {})",
         request.url, request.max_urls
@@ -45,7 +43,10 @@ pub async fn llmstxt_core_logic(
     // Discover more URLs than needed, then prioritize same-host URLs so we
     // get the actual docs pages rather than external/marketing links.
     let parsed_input = url::Url::parse(&request.url).ok();
-    let input_host = parsed_input.as_ref().and_then(|u| u.host_str()).unwrap_or("");
+    let input_host = parsed_input
+        .as_ref()
+        .and_then(|u| u.host_str())
+        .unwrap_or("");
 
     let map_request = MapRequest {
         url: request.url.clone(),
@@ -85,18 +86,22 @@ pub async fn llmstxt_core_logic(
     let urls_total = urls.len();
     let urls: Vec<String> = urls.into_iter().take(request.max_urls as usize).collect();
 
-    info!("Discovered {} URLs, processing up to {}", urls_total, urls.len());
+    info!(
+        "Discovered {} URLs, processing up to {}",
+        urls_total,
+        urls.len()
+    );
 
     // Step 2: Scrape all URLs concurrently with a semaphore
     let semaphore = Arc::new(Semaphore::new(request.max_concurrent_scrapes as usize));
     let llm_config = request.llm_base_url.as_ref().map(|base_url| LlmConfig {
-            base_url: base_url.clone(),
-            model: request
-                .llm_model
-                .clone()
-                .unwrap_or_else(|| "gpt-4o-mini".to_string()),
-            api_key: request.llm_api_key.clone(),
-        });
+        base_url: base_url.clone(),
+        model: request
+            .llm_model
+            .clone()
+            .unwrap_or_else(|| "gpt-4o-mini".to_string()),
+        api_key: request.llm_api_key.clone(),
+    });
     let llm_config = Arc::new(llm_config);
     let http_client = Arc::new(
         Client::builder()
@@ -138,7 +143,11 @@ pub async fn llmstxt_core_logic(
         ));
     }
 
-    info!("Successfully processed {}/{} pages", pages.len(), urls.len());
+    info!(
+        "Successfully processed {}/{} pages",
+        pages.len(),
+        urls.len()
+    );
 
     // Step 3: Build llms.txt and llms-full.txt output
     let llmstxt = build_llmstxt(&request.url, &pages);
@@ -250,9 +259,7 @@ async fn process_url(
         .as_deref()
         .or(data.metadata.og_title.as_deref())
         .or(data.title.as_deref())
-        .unwrap_or_else(|| {
-            url.split('/').next_back().unwrap_or("Untitled")
-        })
+        .unwrap_or_else(|| url.split('/').next_back().unwrap_or("Untitled"))
         .to_string();
 
     // Detect soft 404s
@@ -419,7 +426,8 @@ async fn generate_llm_description(
                     if item_type == "message" {
                         if let Some(content) = item.get("content").and_then(|v| v.as_array()) {
                             for part in content {
-                                let part_type = part.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                let part_type =
+                                    part.get("type").and_then(|v| v.as_str()).unwrap_or("");
                                 if part_type == "output_text" {
                                     if let Some(t) = part.get("text").and_then(|v| v.as_str()) {
                                         text.push_str(t);
@@ -489,7 +497,13 @@ fn extract_description_from_llm_response(content: &str) -> Result<String, String
     // Final fallback: if the response is plain text (no JSON at all),
     // treat the entire response as the description
     if !clean.contains('{') && !clean.is_empty() {
-        let plain: String = clean.lines().next().unwrap_or(&clean).chars().take(100).collect();
+        let plain: String = clean
+            .lines()
+            .next()
+            .unwrap_or(&clean)
+            .chars()
+            .take(100)
+            .collect();
         if !plain.is_empty() {
             debug!("Using plain text LLM response as description");
             return Ok(plain);
@@ -517,9 +531,7 @@ fn build_llms_fulltxt(site_url: &str, pages: &[ProcessedPage]) -> String {
     for (i, page) in pages.iter().enumerate() {
         out.push_str(&format!(
             "## {}\n\nSource: {}\n\n{}\n\n",
-            page.title,
-            page.url,
-            page.markdown
+            page.title, page.url, page.markdown
         ));
         if i < pages.len() - 1 {
             out.push_str("---\n\n");
@@ -564,7 +576,9 @@ mod tests {
         }];
         let result = build_llmstxt("https://example.com", &pages);
         assert!(result.contains("# https://example.com"));
-        assert!(result.contains("- [Docs](https://example.com/docs): Documentation for the project"));
+        assert!(
+            result.contains("- [Docs](https://example.com/docs): Documentation for the project")
+        );
     }
 
     #[test]

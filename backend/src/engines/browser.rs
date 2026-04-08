@@ -1,5 +1,8 @@
 use crate::{
-    engines::{RawScrapeResult, ScrapeEngine, stealth::{apply_stealth_techniques, StealthMode}},
+    engines::{
+        stealth::{apply_stealth_techniques, StealthMode},
+        RawScrapeResult, ScrapeEngine,
+    },
     error::{Result, ScrapeError},
     types::{BrowserAction, ScrapeRequest},
     utils::{url_rewrites::rewrite_url, user_agents::random_user_agent},
@@ -9,16 +12,19 @@ use base64::{engine::general_purpose, Engine as _};
 use chromiumoxide::{
     browser::{Browser, BrowserConfig},
     cdp::browser_protocol::{
-        fetch::{
-            EnableParams, EventRequestPaused, FailRequestParams, ContinueRequestParams,
-        },
+        fetch::{ContinueRequestParams, EnableParams, EventRequestPaused, FailRequestParams},
         network::ErrorReason,
         page::CaptureScreenshotFormat,
     },
     Page,
 };
 use futures::StreamExt;
-use std::{env, path::PathBuf, sync::Arc, time::{Duration, Instant}};
+use std::{
+    env,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, info, warn};
 
@@ -142,10 +148,12 @@ impl BrowserPool {
 
     /// Create a new browser instance
     async fn create_browser(&self) -> Result<Browser> {
-        info!("Launching new browser instance (headless: {})", self.headless);
+        info!(
+            "Launching new browser instance (headless: {})",
+            self.headless
+        );
 
-        let mut browser_config = BrowserConfig::builder()
-            .chrome_executable(&self.chrome_path);
+        let mut browser_config = BrowserConfig::builder().chrome_executable(&self.chrome_path);
 
         // Set headless mode
         if self.headless {
@@ -178,12 +186,9 @@ impl BrowserPool {
 
         // Use a unique temp directory for each browser instance to prevent
         // SingletonLock conflicts when multiple instances launch concurrently
-        let unique_dir = std::env::temp_dir()
-            .join(format!("essence-browser-{}", uuid::Uuid::new_v4()));
-        browser_config = browser_config.arg(format!(
-            "--user-data-dir={}",
-            unique_dir.display()
-        ));
+        let unique_dir =
+            std::env::temp_dir().join(format!("essence-browser-{}", uuid::Uuid::new_v4()));
+        browser_config = browser_config.arg(format!("--user-data-dir={}", unique_dir.display()));
 
         // Set user agent - use provided one or randomize
         let user_agent = match &self.user_agent {
@@ -343,7 +348,10 @@ impl BrowserEngine {
     pub async fn with_config(config: BrowserEngineConfig) -> Result<Self> {
         let pool = Arc::new(BrowserPool::new(config.pool_size).await?);
 
-        info!("Browser engine initialized with pool size: {}", config.pool_size);
+        info!(
+            "Browser engine initialized with pool size: {}",
+            config.pool_size
+        );
 
         Ok(Self { pool })
     }
@@ -361,12 +369,15 @@ impl BrowserEngine {
             return Ok(());
         }
 
-        info!("Enabling ad/analytics blocking for {} domains", BLOCKED_DOMAINS.len());
+        info!(
+            "Enabling ad/analytics blocking for {} domains",
+            BLOCKED_DOMAINS.len()
+        );
 
         // Enable fetch domain for request interception
-        page.execute(EnableParams::default())
-            .await
-            .map_err(|e| ScrapeError::BrowserError(format!("Failed to enable fetch domain: {}", e)))?;
+        page.execute(EnableParams::default()).await.map_err(|e| {
+            ScrapeError::BrowserError(format!("Failed to enable fetch domain: {}", e))
+        })?;
 
         // Clone page for async task
         let page = page.clone();
@@ -556,9 +567,9 @@ impl ScrapeEngine for BrowserEngine {
             // Wait for selector if specified
             if let Some(selector) = &request.wait_for_selector {
                 debug!("Waiting for selector: {}", selector);
-                page.find_element(selector)
-                    .await
-                    .map_err(|e| ScrapeError::ElementNotFound(format!("Selector not found: {}", e)))?;
+                page.find_element(selector).await.map_err(|e| {
+                    ScrapeError::ElementNotFound(format!("Selector not found: {}", e))
+                })?;
             }
 
             // Additional wait time if specified
@@ -723,7 +734,11 @@ mod tests {
     #[ignore] // Requires Chrome to be installed
     async fn test_browser_pool_creation() {
         let pool = BrowserPool::new(2).await;
-        assert!(pool.is_ok(), "Browser pool creation failed: {:?}", pool.err());
+        assert!(
+            pool.is_ok(),
+            "Browser pool creation failed: {:?}",
+            pool.err()
+        );
     }
 
     #[tokio::test]

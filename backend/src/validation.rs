@@ -55,7 +55,12 @@ pub fn validate_css_selector(selector: &str) -> Result<(), ScrapeError> {
 
     // Check for dangerous patterns
     let dangerous_patterns = [
-        "<script", "javascript:", "eval(", "onclick=", "onerror=", "onload=",
+        "<script",
+        "javascript:",
+        "eval(",
+        "onclick=",
+        "onerror=",
+        "onload=",
     ];
 
     for pattern in &dangerous_patterns {

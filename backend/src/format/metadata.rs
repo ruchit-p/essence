@@ -194,7 +194,8 @@ mod tests {
     #[test]
     fn test_extract_description_og_fallback() {
         // When no standard description exists, should fall back to og:description
-        let html = r#"<html><head><meta property="og:description" content="OG desc"></head></html>"#;
+        let html =
+            r#"<html><head><meta property="og:description" content="OG desc"></head></html>"#;
         let doc = Html::parse_document(html);
         let desc = extract_description(&doc);
         assert_eq!(desc, Some("OG desc".to_string()));

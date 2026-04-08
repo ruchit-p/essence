@@ -26,10 +26,10 @@ pub struct CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            content_ttl_secs: 3600,      // 1 hour
-            robots_ttl_secs: 86400,      // 24 hours
-            redirect_ttl_secs: 3600,     // 1 hour
-            max_capacity: 10000,         // 10k entries
+            content_ttl_secs: 3600,  // 1 hour
+            robots_ttl_secs: 86400,  // 24 hours
+            redirect_ttl_secs: 3600, // 1 hour
+            max_capacity: 10000,     // 10k entries
         }
     }
 }
@@ -133,14 +133,14 @@ impl CacheLayer {
     pub fn generate_cache_key(url: &str, headers: Option<&[(String, String)]>) -> String {
         let mut hasher = Hasher::new();
         hasher.update(url.as_bytes());
-        
+
         if let Some(headers) = headers {
             for (key, value) in headers {
                 hasher.update(key.as_bytes());
                 hasher.update(value.as_bytes());
             }
         }
-        
+
         hasher.finalize().to_hex().to_string()
     }
 
@@ -179,7 +179,6 @@ impl CacheLayer {
             metrics_data.content_hits += 1;
             drop(metrics_data);
 
-
             return Ok(cached);
         }
 
@@ -189,12 +188,11 @@ impl CacheLayer {
         metrics_data.content_misses += 1;
         drop(metrics_data);
 
-
         let content = fetch_fn().await?;
-        
+
         // Store in cache
         self.content_cache.insert(cache_key, content.clone()).await;
-        
+
         Ok(content)
     }
 
@@ -215,7 +213,6 @@ impl CacheLayer {
             metrics_data.robots_hits += 1;
             drop(metrics_data);
 
-
             return Ok(cached);
         }
 
@@ -225,12 +222,13 @@ impl CacheLayer {
         metrics_data.robots_misses += 1;
         drop(metrics_data);
 
-
         let robots = fetch_fn().await?;
-        
+
         // Store in cache
-        self.robots_cache.insert(domain.to_string(), robots.clone()).await;
-        
+        self.robots_cache
+            .insert(domain.to_string(), robots.clone())
+            .await;
+
         Ok(robots)
     }
 
@@ -242,7 +240,8 @@ impl CacheLayer {
     ) -> Result<Option<CachedRedirect>, crate::error::ScrapeError>
     where
         F: FnOnce() -> Fut,
-        Fut: std::future::Future<Output = Result<Option<CachedRedirect>, crate::error::ScrapeError>>,
+        Fut:
+            std::future::Future<Output = Result<Option<CachedRedirect>, crate::error::ScrapeError>>,
     {
         // Try to get from cache
         if let Some(cached) = self.redirect_cache.get(url).await {
@@ -250,7 +249,6 @@ impl CacheLayer {
             let mut metrics_data = self.metrics.write().await;
             metrics_data.redirect_hits += 1;
             drop(metrics_data);
-
 
             return Ok(Some(cached));
         }
@@ -261,14 +259,15 @@ impl CacheLayer {
         metrics_data.redirect_misses += 1;
         drop(metrics_data);
 
-
         let redirect = fetch_fn().await?;
-        
+
         // Store in cache if redirect exists
         if let Some(ref redir) = redirect {
-            self.redirect_cache.insert(url.to_string(), redir.clone()).await;
+            self.redirect_cache
+                .insert(url.to_string(), redir.clone())
+                .await;
         }
-        
+
         Ok(redirect)
     }
 
@@ -394,15 +393,21 @@ mod tests {
         let key_no_headers = CacheLayer::generate_cache_key(url, None);
 
         assert_eq!(key1, key2, "Same URL and headers should produce same key");
-        assert_ne!(key1, key3, "Different headers should produce different keys");
-        assert_ne!(key1, key_no_headers, "With and without headers should differ");
+        assert_ne!(
+            key1, key3,
+            "Different headers should produce different keys"
+        );
+        assert_ne!(
+            key1, key_no_headers,
+            "With and without headers should differ"
+        );
     }
 
     #[tokio::test]
     async fn test_cache_layer_creation() {
         let cache = CacheLayer::new();
         let stats = cache.get_stats().await;
-        
+
         assert_eq!(stats.content_size, 0);
         assert_eq!(stats.robots_size, 0);
         assert_eq!(stats.redirect_size, 0);
@@ -412,37 +417,46 @@ mod tests {
     async fn test_content_caching() {
         let cache = CacheLayer::new();
         let url = "https://example.com";
-        
+
         let mut fetch_count = 0;
-        
+
         // First fetch - should miss cache
-        let _content1 = cache.get_or_fetch_content(url, None, || async {
-            fetch_count += 1;
-            Ok(CachedContent {
-                html: "<html></html>".to_string(),
-                status_code: 200,
-                content_type: Some("text/html".to_string()),
-                headers: vec![],
-                cached_at: 0,
+        let _content1 = cache
+            .get_or_fetch_content(url, None, || async {
+                fetch_count += 1;
+                Ok(CachedContent {
+                    html: "<html></html>".to_string(),
+                    status_code: 200,
+                    content_type: Some("text/html".to_string()),
+                    headers: vec![],
+                    cached_at: 0,
+                })
             })
-        }).await.unwrap();
-        
+            .await
+            .unwrap();
+
         assert_eq!(fetch_count, 1);
-        
+
         // Second fetch - should hit cache
-        let _content2 = cache.get_or_fetch_content(url, None, || async {
-            fetch_count += 1;
-            Ok(CachedContent {
-                html: "<html></html>".to_string(),
-                status_code: 200,
-                content_type: Some("text/html".to_string()),
-                headers: vec![],
-                cached_at: 0,
+        let _content2 = cache
+            .get_or_fetch_content(url, None, || async {
+                fetch_count += 1;
+                Ok(CachedContent {
+                    html: "<html></html>".to_string(),
+                    status_code: 200,
+                    content_type: Some("text/html".to_string()),
+                    headers: vec![],
+                    cached_at: 0,
+                })
             })
-        }).await.unwrap();
-        
-        assert_eq!(fetch_count, 1, "Fetch function should not be called on cache hit");
-        
+            .await
+            .unwrap();
+
+        assert_eq!(
+            fetch_count, 1,
+            "Fetch function should not be called on cache hit"
+        );
+
         let stats = cache.get_stats().await;
         assert_eq!(stats.content_hits, 1);
         assert_eq!(stats.content_misses, 1);

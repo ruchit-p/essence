@@ -4,12 +4,8 @@
 //! (Claude, etc.) can use scrape, map, crawl, and search functionality.
 
 use rmcp::{
-    ServerHandler,
-    handler::server::tool::ToolRouter,
-    model::*,
-    tool, tool_handler, tool_router,
-    handler::server::wrapper::Parameters,
-    ErrorData as McpError,
+    handler::server::tool::ToolRouter, handler::server::wrapper::Parameters, model::*, tool,
+    tool_handler, tool_router, ErrorData as McpError, ServerHandler,
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -19,9 +15,7 @@ use crate::{
     api::{llmstxt::llmstxt_core_logic, scrape::scrape_core_logic},
     crawler::{crawl_website, mapper},
     search::SearchProvider,
-    types::{
-        CrawlRequest, LlmsTxtRequest, MapRequest, ScrapeRequest,
-    },
+    types::{CrawlRequest, LlmsTxtRequest, MapRequest, ScrapeRequest},
 };
 
 // ---------------------------------------------------------------------------
@@ -179,7 +173,9 @@ impl EssenceMcpServer {
     /// Scrape a single web page and return its content as Markdown, HTML, or other formats.
     ///
     /// Uses an intelligent HTTP -> Browser fallback strategy for maximum reliability.
-    #[tool(description = "Scrape a single web page and return its content as Markdown (default), HTML, or other formats. Uses intelligent HTTP -> Browser fallback for reliability.")]
+    #[tool(
+        description = "Scrape a single web page and return its content as Markdown (default), HTML, or other formats. Uses intelligent HTTP -> Browser fallback for reliability."
+    )]
     async fn scrape(
         &self,
         Parameters(params): Parameters<ScrapeParams>,
@@ -188,7 +184,9 @@ impl EssenceMcpServer {
 
         let request = ScrapeRequest {
             url: params.url.clone(),
-            formats: params.formats.unwrap_or_else(|| vec!["markdown".to_string()]),
+            formats: params
+                .formats
+                .unwrap_or_else(|| vec!["markdown".to_string()]),
             engine: params.engine.unwrap_or_else(|| "auto".to_string()),
             timeout: params.timeout_ms.unwrap_or(30000),
             ..ScrapeRequest::default()
@@ -215,7 +213,9 @@ impl EssenceMcpServer {
     }
 
     /// Discover URLs from a website via sitemaps and in-page link extraction.
-    #[tool(description = "Discover URLs from a website via sitemaps and in-page link extraction. Returns a list of discovered URLs.")]
+    #[tool(
+        description = "Discover URLs from a website via sitemaps and in-page link extraction. Returns a list of discovered URLs."
+    )]
     async fn map(
         &self,
         Parameters(params): Parameters<MapParams>,
@@ -256,7 +256,9 @@ impl EssenceMcpServer {
     }
 
     /// Crawl a website starting from a URL, following links up to a specified depth and page limit.
-    #[tool(description = "Crawl a website starting from a URL, following links up to a specified depth and page limit. Returns scraped content from all crawled pages.")]
+    #[tool(
+        description = "Crawl a website starting from a URL, following links up to a specified depth and page limit. Returns scraped content from all crawled pages."
+    )]
     async fn crawl(
         &self,
         Parameters(params): Parameters<CrawlParams>,
@@ -304,7 +306,9 @@ impl EssenceMcpServer {
     }
 
     /// Search the web using DuckDuckGo and optionally scrape each result page.
-    #[tool(description = "Search the web using DuckDuckGo and optionally scrape each result page for full content. Returns search results with titles, URLs, and snippets.")]
+    #[tool(
+        description = "Search the web using DuckDuckGo and optionally scrape each result page for full content. Returns search results with titles, URLs, and snippets."
+    )]
     async fn search(
         &self,
         Parameters(params): Parameters<SearchParams>,
@@ -312,10 +316,7 @@ impl EssenceMcpServer {
         info!("MCP tool call: search query={}", params.query);
 
         let provider = SearchProvider::new().map_err(|e| {
-            McpError::internal_error(
-                format!("Failed to create search provider: {}", e),
-                None,
-            )
+            McpError::internal_error(format!("Failed to create search provider: {}", e), None)
         })?;
 
         let limit = params.limit.unwrap_or(10);
@@ -323,12 +324,7 @@ impl EssenceMcpServer {
         let mut results = provider
             .search_duckduckgo(&params.query, limit)
             .await
-            .map_err(|e| {
-                McpError::internal_error(
-                    format!("Search failed: {}", e),
-                    None,
-                )
-            })?;
+            .map_err(|e| McpError::internal_error(format!("Search failed: {}", e), None))?;
 
         // Optionally scrape each result
         if params.scrape_results.unwrap_or(false) {
@@ -361,10 +357,7 @@ impl EssenceMcpServer {
             "data": results
         });
         let json = serde_json::to_string_pretty(&response).map_err(|e| {
-            McpError::internal_error(
-                format!("Failed to serialize search response: {}", e),
-                None,
-            )
+            McpError::internal_error(format!("Failed to serialize search response: {}", e), None)
         })?;
         Ok(CallToolResult::success(vec![Content::text(json)]))
     }
@@ -373,7 +366,9 @@ impl EssenceMcpServer {
     ///
     /// Discovers URLs, scrapes each page, and builds structured text files
     /// optimized for LLM consumption.
-    #[tool(description = "Generate llms.txt and llms-full.txt from a website. Discovers URLs via sitemaps/links, scrapes each page, and produces structured index + full-text files for LLM consumption. Optionally uses an OpenAI-compatible API to generate concise page descriptions.")]
+    #[tool(
+        description = "Generate llms.txt and llms-full.txt from a website. Discovers URLs via sitemaps/links, scrapes each page, and produces structured index + full-text files for LLM consumption. Optionally uses an OpenAI-compatible API to generate concise page descriptions."
+    )]
     async fn llmstxt(
         &self,
         Parameters(params): Parameters<LlmsTxtParams>,

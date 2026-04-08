@@ -63,8 +63,7 @@ impl Settings {
                 port: env_or("PORT", 8080),
                 host: std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
                 max_request_size_mb: env_or("MAX_REQUEST_SIZE_MB", 1),
-                log_level: std::env::var("RUST_LOG")
-                    .unwrap_or_else(|_| "essence=info".to_string()),
+                log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "essence=info".to_string()),
             },
             browser: BrowserSettings {
                 headless: env_or("BROWSER_HEADLESS", true),

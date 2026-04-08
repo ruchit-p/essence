@@ -14,8 +14,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // MCP server imports
 use rmcp::transport::streamable_http_server::{
-    session::local::LocalSessionManager,
-    StreamableHttpService, StreamableHttpServerConfig,
+    session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 };
 
 #[derive(Parser)]
@@ -89,7 +88,10 @@ async fn run_http(port: u16) {
     });
     match essence::api::scrape::get_shared_racer(settings.engine.waterfall_delay_ms).await {
         Ok(_) => info!("Shared EngineRacer pre-warmed successfully"),
-        Err(e) => warn!("Failed to pre-warm EngineRacer: {} (will retry on first request)", e),
+        Err(e) => warn!(
+            "Failed to pre-warm EngineRacer: {} (will retry on first request)",
+            e
+        ),
     }
 
     let max_request_size_mb: usize = std::env::var("MAX_REQUEST_SIZE_MB")
@@ -106,7 +108,9 @@ async fn run_http(port: u16) {
 
     let app = api::create_router()
         .nest_service("/mcp", mcp_service)
-        .layer(RequestBodyLimitLayer::new(max_request_size_mb * 1024 * 1024))
+        .layer(RequestBodyLimitLayer::new(
+            max_request_size_mb * 1024 * 1024,
+        ))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

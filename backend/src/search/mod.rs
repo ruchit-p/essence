@@ -39,11 +39,7 @@ impl SearchProvider {
     }
 
     /// Perform a single DuckDuckGo search attempt without retry logic
-    async fn search_duckduckgo_once(
-        &self,
-        query: &str,
-        limit: u32,
-    ) -> Result<Vec<SearchResult>> {
+    async fn search_duckduckgo_once(&self, query: &str, limit: u32) -> Result<Vec<SearchResult>> {
         info!("Searching DuckDuckGo for: {}", query);
 
         // DuckDuckGo HTML search URL
@@ -60,10 +56,7 @@ impl SearchProvider {
             .await
             .map_err(ScrapeError::RequestFailed)?;
 
-        let html_content = response
-            .text()
-            .await
-            .map_err(ScrapeError::RequestFailed)?;
+        let html_content = response.text().await.map_err(ScrapeError::RequestFailed)?;
 
         // Parse HTML
         let document = Html::parse_document(&html_content);

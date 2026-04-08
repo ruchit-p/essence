@@ -25,7 +25,11 @@ pub async fn discover_urls(url: &str, options: &MapRequest) -> Result<Vec<String
     // 1. Try sitemap discovery first (unless explicitly ignored)
     // Use the site root (scheme + host) for sitemap discovery, since sitemaps
     // live at the domain root, not under arbitrary paths.
-    let site_root = format!("{}://{}", base_url.scheme(), base_url.host_str().unwrap_or(""));
+    let site_root = format!(
+        "{}://{}",
+        base_url.scheme(),
+        base_url.host_str().unwrap_or("")
+    );
     if !options.ignore_sitemap.unwrap_or(false) {
         match sitemap::fetch_sitemap(&site_root, &client).await {
             Ok(sitemap_urls) => {
@@ -148,7 +152,10 @@ mod tests {
         // registrable domain should match each other.
         let base = extract_etld_plus_one_from_host("www.example.co.uk");
         let sub = extract_etld_plus_one_from_host("api.example.co.uk");
-        assert_eq!(base, sub, "subdomains of example.co.uk should share the same eTLD+1");
+        assert_eq!(
+            base, sub,
+            "subdomains of example.co.uk should share the same eTLD+1"
+        );
         assert_eq!(base, "example.co.uk");
     }
 
@@ -163,9 +170,18 @@ mod tests {
 
     #[test]
     fn test_etld_plus_one_basic() {
-        assert_eq!(extract_etld_plus_one_from_host("example.com"), "example.com");
-        assert_eq!(extract_etld_plus_one_from_host("blog.example.com"), "example.com");
-        assert_eq!(extract_etld_plus_one_from_host("api.blog.example.com"), "example.com");
+        assert_eq!(
+            extract_etld_plus_one_from_host("example.com"),
+            "example.com"
+        );
+        assert_eq!(
+            extract_etld_plus_one_from_host("blog.example.com"),
+            "example.com"
+        );
+        assert_eq!(
+            extract_etld_plus_one_from_host("api.blog.example.com"),
+            "example.com"
+        );
         assert_eq!(extract_etld_plus_one_from_host("localhost"), "localhost");
     }
 

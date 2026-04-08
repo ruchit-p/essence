@@ -4,7 +4,10 @@ pub mod map;
 pub mod scrape;
 pub mod search;
 
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 /// Create the API router with core endpoints
 pub fn create_router() -> Router {

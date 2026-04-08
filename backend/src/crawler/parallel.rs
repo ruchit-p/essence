@@ -5,11 +5,11 @@ use crate::{
     crawler::filter::{is_same_domain, should_crawl_url},
     crawler::pagination::{PaginationConfig, PaginationDetector},
     crawler::rate_limiter::DomainRateLimiter,
+    crawler::url_normalization::normalize_url,
     engines::{http::HttpEngine, ScrapeEngine},
     error::{Result, ScrapeError},
     format,
     types::{CrawlRequest, Document, ScrapeRequest},
-    crawler::url_normalization::normalize_url,
     utils::robots,
 };
 use scraper::{Html, Selector};
@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Semaphore};
 use tokio::time::{timeout, Duration};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 /// Parallel crawler with configurable concurrency
@@ -115,9 +115,15 @@ impl ParallelCrawler {
         let (doc_tx, doc_rx) = mpsc::channel::<Document>(config.max_queue_size);
 
         // Add base URL to the queue
-        url_depths.write().await.insert(normalized_base_url.clone(), 0);
+        url_depths
+            .write()
+            .await
+            .insert(normalized_base_url.clone(), 0);
         if let Err(e) = url_tx.send((normalized_base_url.clone(), 0)).await {
-            return Err(ScrapeError::Internal(format!("Failed to enqueue base URL: {}", e)));
+            return Err(ScrapeError::Internal(format!(
+                "Failed to enqueue base URL: {}",
+                e
+            )));
         }
 
         // Clone request for workers
@@ -182,10 +188,13 @@ impl ParallelCrawler {
         // Collect documents up to limit
         while let Some(doc) = doc_rx.recv().await {
             documents.push(doc);
-            
+
             // Stop collecting once we reach the limit
             if documents.len() >= doc_limit {
-                info!("Reached document limit of {}, stopping collection", doc_limit);
+                info!(
+                    "Reached document limit of {}, stopping collection",
+                    doc_limit
+                );
                 break;
             }
         }
@@ -262,7 +271,10 @@ impl ParallelCrawler {
 
             // Check depth limit
             if current_depth > request.max_depth {
-                debug!("Worker {}: Skipping URL due to depth limit: {}", worker_id, current_url);
+                debug!(
+                    "Worker {}: Skipping URL due to depth limit: {}",
+                    worker_id, current_url
+                );
                 continue;
             }
 
@@ -286,12 +298,18 @@ impl ParallelCrawler {
                 match robots::is_allowed_default(&current_url).await {
                     Ok(allowed) => {
                         if !allowed {
-                            warn!("Worker {}: Robots.txt disallows crawling: {}", worker_id, current_url);
+                            warn!(
+                                "Worker {}: Robots.txt disallows crawling: {}",
+                                worker_id, current_url
+                            );
                             continue;
                         }
                     }
                     Err(e) => {
-                        warn!("Worker {}: Failed to check robots.txt for {}: {}", worker_id, current_url, e);
+                        warn!(
+                            "Worker {}: Failed to check robots.txt for {}: {}",
+                            worker_id, current_url, e
+                        );
                     }
                 }
             }
@@ -314,12 +332,16 @@ impl ParallelCrawler {
             }
 
             // Acquire scrape semaphore permit
-            let _permit = scrape_semaphore.acquire().await
-                .map_err(|e| ScrapeError::Internal(format!("Failed to acquire scrape permit: {}", e)))?;
+            let _permit = scrape_semaphore.acquire().await.map_err(|e| {
+                ScrapeError::Internal(format!("Failed to acquire scrape permit: {}", e))
+            })?;
 
             // Apply rate limiting before scraping
             if let Err(e) = rate_limiter.wait_for_permission(&current_url).await {
-                warn!("Worker {}: Rate limiter error for {}: {}", worker_id, current_url, e);
+                warn!(
+                    "Worker {}: Rate limiter error for {}: {}",
+                    worker_id, current_url, e
+                );
                 continue;
             }
 
@@ -335,8 +357,9 @@ impl ParallelCrawler {
             // Scrape with retry for transient errors
             let mut scrape_result = timeout(
                 Duration::from_secs(config.scrape_timeout_secs),
-                scrape_url(&current_url, &engine, &config, engine_mode)
-            ).await;
+                scrape_url(&current_url, &engine, &config, engine_mode),
+            )
+            .await;
             for retry in 0..2 {
                 let should_retry = match &scrape_result {
                     Ok(Err(e)) => e.is_transient(),
@@ -346,12 +369,18 @@ impl ParallelCrawler {
                 if !should_retry {
                     break;
                 }
-                tracing::debug!("Worker {}: Retrying transient error for {} (attempt {})", worker_id, current_url, retry + 2);
+                tracing::debug!(
+                    "Worker {}: Retrying transient error for {} (attempt {})",
+                    worker_id,
+                    current_url,
+                    retry + 2
+                );
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 scrape_result = timeout(
                     Duration::from_secs(config.scrape_timeout_secs),
-                    scrape_url(&current_url, &engine, &config, engine_mode)
-                ).await;
+                    scrape_url(&current_url, &engine, &config, engine_mode),
+                )
+                .await;
             }
 
             match scrape_result {
@@ -366,7 +395,10 @@ impl ParallelCrawler {
                         let mut dedup = content_dedup.lock().await;
                         if let Some(ref md) = document.markdown {
                             if dedup.is_duplicate(md) {
-                                debug!("Worker {}: Skipping duplicate content: {}", worker_id, current_url);
+                                debug!(
+                                    "Worker {}: Skipping duplicate content: {}",
+                                    worker_id, current_url
+                                );
                                 // Still process links below but skip sending the document
                                 // Process discovered links if we haven't reached max depth
                                 if current_depth < request.max_depth {
@@ -375,7 +407,9 @@ impl ParallelCrawler {
                                         {
                                             let visited_read = visited.read().await;
                                             let depths_read = url_depths.read().await;
-                                            if visited_read.contains(&normalized_link) || depths_read.contains_key(&normalized_link) {
+                                            if visited_read.contains(&normalized_link)
+                                                || depths_read.contains_key(&normalized_link)
+                                            {
                                                 continue;
                                             }
                                         }
@@ -383,12 +417,19 @@ impl ParallelCrawler {
                                             {
                                                 let mut depths_write = url_depths.write().await;
                                                 if depths_write.len() < config.max_queue_size {
-                                                    depths_write.insert(normalized_link.clone(), current_depth + 1);
+                                                    depths_write.insert(
+                                                        normalized_link.clone(),
+                                                        current_depth + 1,
+                                                    );
                                                 } else {
                                                     continue;
                                                 }
                                             }
-                                            if url_tx.send((normalized_link, current_depth + 1)).await.is_err() {
+                                            if url_tx
+                                                .send((normalized_link, current_depth + 1))
+                                                .await
+                                                .is_err()
+                                            {
                                                 return Ok(());
                                             }
                                         }
@@ -423,7 +464,9 @@ impl ParallelCrawler {
                             {
                                 let visited_read = visited.read().await;
                                 let depths_read = url_depths.read().await;
-                                if visited_read.contains(&normalized_link) || depths_read.contains_key(&normalized_link) {
+                                if visited_read.contains(&normalized_link)
+                                    || depths_read.contains_key(&normalized_link)
+                                {
                                     continue;
                                 }
                             }
@@ -435,7 +478,7 @@ impl ParallelCrawler {
                                     let mut depths_write = url_depths.write().await;
                                     depths_write.insert(normalized_link.clone(), current_depth);
                                 }
-                                
+
                                 if url_tx.send((normalized_link, current_depth)).await.is_err() {
                                     debug!("Worker {}: URL receiver closed, exiting", worker_id);
                                     return Ok(());
@@ -452,13 +495,17 @@ impl ParallelCrawler {
                             {
                                 let visited_read = visited.read().await;
                                 let depths_read = url_depths.read().await;
-                                if visited_read.contains(&normalized_link) || depths_read.contains_key(&normalized_link) {
+                                if visited_read.contains(&normalized_link)
+                                    || depths_read.contains_key(&normalized_link)
+                                {
                                     continue;
                                 }
                             }
 
                             // Skip if this is a pagination link (already processed)
-                            if pagination_links.contains(&link) || pagination_links.contains(&normalized_link) {
+                            if pagination_links.contains(&link)
+                                || pagination_links.contains(&normalized_link)
+                            {
                                 continue;
                             }
 
@@ -479,14 +526,22 @@ impl ParallelCrawler {
                                 {
                                     let mut depths_write = url_depths.write().await;
                                     if depths_write.len() < config.max_queue_size {
-                                        depths_write.insert(normalized_link.clone(), current_depth + 1);
+                                        depths_write
+                                            .insert(normalized_link.clone(), current_depth + 1);
                                     } else {
-                                        debug!("Worker {}: Queue limit reached, skipping link: {}", worker_id, link);
+                                        debug!(
+                                            "Worker {}: Queue limit reached, skipping link: {}",
+                                            worker_id, link
+                                        );
                                         continue;
                                     }
                                 }
-                                
-                                if url_tx.send((normalized_link, current_depth + 1)).await.is_err() {
+
+                                if url_tx
+                                    .send((normalized_link, current_depth + 1))
+                                    .await
+                                    .is_err()
+                                {
                                     debug!("Worker {}: URL receiver closed, exiting", worker_id);
                                     return Ok(());
                                 }
@@ -495,7 +550,10 @@ impl ParallelCrawler {
                     }
                 }
                 Ok(Err(e)) => {
-                    warn!("Worker {}: Failed to scrape {}: {}", worker_id, current_url, e);
+                    warn!(
+                        "Worker {}: Failed to scrape {}: {}",
+                        worker_id, current_url, e
+                    );
 
                     // Handle 429 Too Many Requests
                     if let ScrapeError::RequestFailed(ref reqwest_err) = e {
@@ -547,7 +605,12 @@ async fn check_robots_txt(url: &str, ignore_sitemap: Option<bool>) -> bool {
 }
 
 /// Scrape a single URL and extract links
-async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engine_mode: &str) -> Result<(Document, Vec<String>, String)> {
+async fn scrape_url(
+    url: &str,
+    engine: &HttpEngine,
+    config: &CrawlerConfig,
+    engine_mode: &str,
+) -> Result<(Document, Vec<String>, String)> {
     // Create a scrape request
     let scrape_request = ScrapeRequest {
         url: url.to_string(),
@@ -573,10 +636,17 @@ async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engi
     // Check if the HTTP result has thin content and we should try browser fallback
     if engine_mode == "auto" {
         let html_text_len = scraper::Html::parse_document(&raw_result.html)
-            .root_element().text().collect::<String>().trim().len();
+            .root_element()
+            .text()
+            .collect::<String>()
+            .trim()
+            .len();
 
         if html_text_len < 100 {
-            debug!("Thin content detected ({} chars) for {}, trying browser fallback", html_text_len, url);
+            debug!(
+                "Thin content detected ({} chars) for {}, trying browser fallback",
+                html_text_len, url
+            );
 
             let fallback_request = ScrapeRequest {
                 url: url.to_string(),
@@ -598,7 +668,9 @@ async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engi
 
             if let Ok(response) = scrape_core_logic(&fallback_request).await {
                 if let Some(doc) = response.data {
-                    let has_good_content = doc.markdown.as_ref()
+                    let has_good_content = doc
+                        .markdown
+                        .as_ref()
                         .map(|md| md.len() > 100)
                         .unwrap_or(false);
 
@@ -717,7 +789,7 @@ mod tests {
     async fn test_parallel_crawler_with_config() {
         let mut config = CrawlerConfig::default();
         config.max_concurrent_requests = 5;
-        
+
         let crawler = ParallelCrawler::with_config(&config);
         assert_eq!(crawler.max_workers, 5);
     }

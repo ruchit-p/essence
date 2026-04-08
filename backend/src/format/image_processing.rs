@@ -33,9 +33,7 @@ pub fn parse_srcset_pick_largest(srcset: &str) -> Option<String> {
     }
 
     // Sort by width (descending), then return first
-    sources.sort_by(|a, b| {
-        b.width.unwrap_or(0).cmp(&a.width.unwrap_or(0))
-    });
+    sources.sort_by(|a, b| b.width.unwrap_or(0).cmp(&a.width.unwrap_or(0)));
 
     sources.first().map(|s| s.url.clone())
 }
@@ -50,7 +48,7 @@ fn parse_width_descriptor(desc: &str) -> Option<u32> {
         // Use 600px as base (typical image container width)
         // So 1x=600, 2x=1200, 3x=1800
         let multiplier = desc.trim_end_matches('x').parse::<f32>().ok()?;
-        Some((multiplier * 600.0) as u32)  // Convert to pseudo-width
+        Some((multiplier * 600.0) as u32) // Convert to pseudo-width
     } else {
         None
     }
@@ -64,18 +62,13 @@ struct ImageSource {
 
 /// Resolve all srcset attributes in HTML to use largest image
 pub fn resolve_srcsets(html: &str) -> String {
-    static RE_IMG_SRCSET: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"<img[^>]*srcset="[^"]*"[^>]*>"#).unwrap()
-    });
-    static RE_SRCSET_ATTR: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"srcset="([^"]*)""#).unwrap()
-    });
-    static RE_SRC_ATTR: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"src="[^"]*""#).unwrap()
-    });
-    static RE_SRCSET_REMOVE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"\s*srcset="[^"]*""#).unwrap()
-    });
+    static RE_IMG_SRCSET: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"<img[^>]*srcset="[^"]*"[^>]*>"#).unwrap());
+    static RE_SRCSET_ATTR: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"srcset="([^"]*)""#).unwrap());
+    static RE_SRC_ATTR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"src="[^"]*""#).unwrap());
+    static RE_SRCSET_REMOVE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"\s*srcset="[^"]*""#).unwrap());
 
     let mut result = html.to_string();
     let mut replacements: Vec<(String, String)> = Vec::new();
@@ -90,7 +83,9 @@ pub fn resolve_srcsets(html: &str) -> String {
                 let mut new_tag = old_tag.to_string();
 
                 if RE_SRC_ATTR.is_match(&new_tag) {
-                    new_tag = RE_SRC_ATTR.replace(&new_tag, &format!(r#"src="{}""#, largest)).to_string();
+                    new_tag = RE_SRC_ATTR
+                        .replace(&new_tag, &format!(r#"src="{}""#, largest))
+                        .to_string();
                 } else {
                     new_tag = new_tag.replace("<img ", &format!(r#"<img src="{}" "#, largest));
                 }
@@ -112,12 +107,9 @@ pub fn resolve_srcsets(html: &str) -> String {
 /// Many sites put the real <img> inside <noscript> while using lazy-loading JS
 /// in the main content. This extracts those images so they survive stripping.
 pub fn rescue_noscript_images(html: &str) -> String {
-    static RE_NOSCRIPT: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?is)<noscript[^>]*>(.*?)</noscript>").unwrap()
-    });
-    static RE_IMG: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?is)<img\s[^>]*>").unwrap()
-    });
+    static RE_NOSCRIPT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?is)<noscript[^>]*>(.*?)</noscript>").unwrap());
+    static RE_IMG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)<img\s[^>]*>").unwrap());
 
     let mut rescued = Vec::new();
     for cap in RE_NOSCRIPT.captures_iter(html) {
@@ -144,48 +136,49 @@ pub fn rescue_noscript_images(html: &str) -> String {
 
 /// Resolve <picture> elements to simple <img> tags by picking the largest <source>.
 pub fn resolve_picture_elements(html: &str) -> String {
-    static RE_PICTURE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?is)<picture[^>]*>(.*?)</picture>").unwrap()
-    });
+    static RE_PICTURE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?is)<picture[^>]*>(.*?)</picture>").unwrap());
     static RE_SOURCE_SRCSET: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r#"(?is)<source[^>]*srcset\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap()
     });
-    static RE_IMG_TAG: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?is)<img\s[^>]*>").unwrap()
-    });
+    static RE_IMG_TAG: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?is)<img\s[^>]*>").unwrap());
 
-    RE_PICTURE.replace_all(html, |caps: &regex::Captures| {
-        let inner = &caps[1];
+    RE_PICTURE
+        .replace_all(html, |caps: &regex::Captures| {
+            let inner = &caps[1];
 
-        // Try to find the best source from <source srcset="...">
-        let mut best_url: Option<String> = None;
-        for source_cap in RE_SOURCE_SRCSET.captures_iter(inner) {
-            let srcset = &source_cap[1];
-            if let Some(url) = parse_srcset_pick_largest(srcset) {
-                best_url = Some(url);
+            // Try to find the best source from <source srcset="...">
+            let mut best_url: Option<String> = None;
+            for source_cap in RE_SOURCE_SRCSET.captures_iter(inner) {
+                let srcset = &source_cap[1];
+                if let Some(url) = parse_srcset_pick_largest(srcset) {
+                    best_url = Some(url);
+                }
             }
-        }
 
-        // If we found a <source>, build an <img> with that URL
-        if let Some(url) = best_url {
-            // Try to preserve alt from the fallback <img>
-            if let Some(img_match) = RE_IMG_TAG.find(inner) {
-                let img_tag = img_match.as_str();
-                let alt_regex = Regex::new(r#"alt\s*=\s*["']([^"']*?)["']"#).unwrap();
-                let alt = alt_regex.captures(img_tag)
-                    .map(|c| c[1].to_string())
-                    .unwrap_or_default();
-                format!(r#"<img src="{}" alt="{}">"#, url, alt)
+            // If we found a <source>, build an <img> with that URL
+            if let Some(url) = best_url {
+                // Try to preserve alt from the fallback <img>
+                if let Some(img_match) = RE_IMG_TAG.find(inner) {
+                    let img_tag = img_match.as_str();
+                    let alt_regex = Regex::new(r#"alt\s*=\s*["']([^"']*?)["']"#).unwrap();
+                    let alt = alt_regex
+                        .captures(img_tag)
+                        .map(|c| c[1].to_string())
+                        .unwrap_or_default();
+                    format!(r#"<img src="{}" alt="{}">"#, url, alt)
+                } else {
+                    format!(r#"<img src="{}" alt="">"#, url)
+                }
+            } else if let Some(img_match) = RE_IMG_TAG.find(inner) {
+                // No <source> found, just use the fallback <img>
+                img_match.as_str().to_string()
             } else {
-                format!(r#"<img src="{}" alt="">"#, url)
+                String::new()
             }
-        } else if let Some(img_match) = RE_IMG_TAG.find(inner) {
-            // No <source> found, just use the fallback <img>
-            img_match.as_str().to_string()
-        } else {
-            String::new()
-        }
-    }).to_string()
+        })
+        .to_string()
 }
 
 /// Resolve lazy-loaded images by promoting data-src, data-lazy-src, etc. to src.
@@ -196,35 +189,38 @@ pub fn resolve_lazy_images(html: &str) -> String {
     static RE_DATA_SRC: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r#"data-(?:src|lazy-src|original|lazy-load)\s*=\s*["']([^"']+)["']"#).unwrap()
     });
-    static RE_HAS_REAL_SRC: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"(?i)\bsrc\s*=\s*["']([^"']+)["']"#).unwrap()
-    });
+    static RE_HAS_REAL_SRC: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"(?i)\bsrc\s*=\s*["']([^"']+)["']"#).unwrap());
 
-    RE_LAZY_IMG.replace_all(html, |caps: &regex::Captures| {
-        let tag = &caps[0];
+    RE_LAZY_IMG
+        .replace_all(html, |caps: &regex::Captures| {
+            let tag = &caps[0];
 
-        // Extract the lazy data-src URL
-        if let Some(data_cap) = RE_DATA_SRC.captures(tag) {
-            let lazy_url = &data_cap[1];
+            // Extract the lazy data-src URL
+            if let Some(data_cap) = RE_DATA_SRC.captures(tag) {
+                let lazy_url = &data_cap[1];
 
-            // If there's already a real src (not data: URI), keep the tag as-is
-            if let Some(src_cap) = RE_HAS_REAL_SRC.captures(tag) {
-                if !src_cap[1].starts_with("data:") {
-                    return tag.to_string();
+                // If there's already a real src (not data: URI), keep the tag as-is
+                if let Some(src_cap) = RE_HAS_REAL_SRC.captures(tag) {
+                    if !src_cap[1].starts_with("data:") {
+                        return tag.to_string();
+                    }
                 }
-            }
 
-            // Replace or add src with the lazy URL
-            let src_attr = Regex::new(r#"src\s*=\s*["'][^"']*["']"#).unwrap();
-            if src_attr.is_match(tag) {
-                src_attr.replace(tag, &format!(r#"src="{}""#, lazy_url)).to_string()
+                // Replace or add src with the lazy URL
+                let src_attr = Regex::new(r#"src\s*=\s*["'][^"']*["']"#).unwrap();
+                if src_attr.is_match(tag) {
+                    src_attr
+                        .replace(tag, &format!(r#"src="{}""#, lazy_url))
+                        .to_string()
+                } else {
+                    tag.replace("<img ", &format!(r#"<img src="{}" "#, lazy_url))
+                }
             } else {
-                tag.replace("<img ", &format!(r#"<img src="{}" "#, lazy_url))
+                tag.to_string()
             }
-        } else {
-            tag.to_string()
-        }
-    }).to_string()
+        })
+        .to_string()
 }
 
 /// Extract video poster frames as images so they appear in markdown output.
@@ -233,12 +229,17 @@ pub fn resolve_video_posters(html: &str) -> String {
         Regex::new(r#"(?is)<video[^>]*poster\s*=\s*["']([^"']+)["'][^>]*>.*?</video>"#).unwrap()
     });
 
-    RE_VIDEO_POSTER.replace_all(html, |caps: &regex::Captures| {
-        let poster_url = &caps[1];
-        let original = &caps[0];
-        // Keep the original video tag and append a poster image
-        format!(r#"{}<img src="{}" alt="Video poster">"#, original, poster_url)
-    }).to_string()
+    RE_VIDEO_POSTER
+        .replace_all(html, |caps: &regex::Captures| {
+            let poster_url = &caps[1];
+            let original = &caps[0];
+            // Keep the original video tag and append a poster image
+            format!(
+                r#"{}<img src="{}" alt="Video poster">"#,
+                original, poster_url
+            )
+        })
+        .to_string()
 }
 
 #[cfg(test)]

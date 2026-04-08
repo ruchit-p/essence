@@ -6,11 +6,11 @@ use crate::{
     crawler::pagination::{PaginationConfig, PaginationDetector},
     crawler::prioritizer::{PrioritizedUrl, UrlPrioritizer},
     crawler::rate_limiter::DomainRateLimiter,
+    crawler::url_normalization::normalize_url,
     engines::{http::HttpEngine, ScrapeEngine},
     error::{Result, ScrapeError},
     format,
     types::{CrawlEvent, CrawlRequest, Document, ScrapeRequest},
-    crawler::url_normalization::normalize_url,
     utils::robots,
 };
 use scraper::{Html, Selector};
@@ -52,7 +52,8 @@ pub async fn crawl_website_stream(
     let mut error_count = 0usize;
 
     // Add normalized base URL to priority queue
-    let base_prioritized_url = PrioritizedUrl::new(normalized_base_url.clone(), 0, &url_prioritizer);
+    let base_prioritized_url =
+        PrioritizedUrl::new(normalized_base_url.clone(), 0, &url_prioritizer);
     queue.push(base_prioritized_url);
     url_depths.insert(normalized_base_url, 0);
 
@@ -96,10 +97,12 @@ pub async fn crawl_website_stream(
             if let Err(e) = memory_monitor.check_memory_limit() {
                 warn!("Memory limit check failed: {}", e);
                 let error_msg = e.to_string();
-                let _ = tx.send(Ok(CrawlEvent::Error {
-                    url: current_url.clone(),
-                    error: error_msg.clone(),
-                })).await;
+                let _ = tx
+                    .send(Ok(CrawlEvent::Error {
+                        url: current_url.clone(),
+                        error: error_msg.clone(),
+                    }))
+                    .await;
                 return Err(ScrapeError::ResourceLimit(error_msg));
             }
         }
@@ -188,9 +191,7 @@ pub async fn crawl_website_stream(
         // Scrape the URL
         info!(
             "Crawling URL: {} (depth: {}, total: {})",
-            current_url,
-            current_depth,
-            success_count
+            current_url, current_depth, success_count
         );
 
         // Determine engine mode from request
@@ -199,10 +200,19 @@ pub async fn crawl_website_stream(
         // Scrape with retry for transient errors
         let mut scrape_result = scrape_url(&current_url, &engine, &config, engine_mode).await;
         for retry in 0..2 {
-            if scrape_result.is_ok() || !scrape_result.as_ref().err().is_some_and(|e| e.is_transient()) {
+            if scrape_result.is_ok()
+                || !scrape_result
+                    .as_ref()
+                    .err()
+                    .is_some_and(|e| e.is_transient())
+            {
                 break;
             }
-            tracing::debug!("Retrying transient error for {} (attempt {})", current_url, retry + 2);
+            tracing::debug!(
+                "Retrying transient error for {} (attempt {})",
+                current_url,
+                retry + 2
+            );
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             scrape_result = scrape_url(&current_url, &engine, &config, engine_mode).await;
         }
@@ -225,15 +235,16 @@ pub async fn crawl_website_stream(
                                 if !visited.contains(&normalized_link)
                                     && !url_depths.contains_key(&normalized_link)
                                     && is_same_domain(&normalized_link, &request.url)
-                                    && queue.len() < config.max_queue_size {
-                                        let prioritized_link = PrioritizedUrl::new(
-                                            normalized_link.clone(),
-                                            current_depth + 1,
-                                            &url_prioritizer,
-                                        );
-                                        queue.push(prioritized_link);
-                                        url_depths.insert(normalized_link, current_depth + 1);
-                                    }
+                                    && queue.len() < config.max_queue_size
+                                {
+                                    let prioritized_link = PrioritizedUrl::new(
+                                        normalized_link.clone(),
+                                        current_depth + 1,
+                                        &url_prioritizer,
+                                    );
+                                    queue.push(prioritized_link);
+                                    url_depths.insert(normalized_link, current_depth + 1);
+                                }
                             }
                         }
                         continue;
@@ -314,7 +325,9 @@ pub async fn crawl_website_stream(
                         }
 
                         // Skip if this is a pagination link (already processed)
-                        if pagination_links.contains(&link) || pagination_links.contains(&normalized_link) {
+                        if pagination_links.contains(&link)
+                            || pagination_links.contains(&normalized_link)
+                        {
                             continue;
                         }
 
@@ -343,8 +356,9 @@ pub async fn crawl_website_stream(
                             }
 
                             // Apply backpressure: when queue is at threshold, skip secondary links
-                            let backpressure_limit =
-                                (config.max_queue_size * config.backpressure_threshold as usize) / 100;
+                            let backpressure_limit = (config.max_queue_size
+                                * config.backpressure_threshold as usize)
+                                / 100;
                             if queue.len() >= backpressure_limit {
                                 debug!(
                                     "Queue at backpressure threshold ({}/{}), slowing link discovery",
@@ -448,7 +462,12 @@ async fn check_robots_txt(url: &str, ignore_sitemap: Option<bool>) -> bool {
 }
 
 /// Scrape a single URL and extract links
-async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engine_mode: &str) -> Result<(Document, Vec<String>, String)> {
+async fn scrape_url(
+    url: &str,
+    engine: &HttpEngine,
+    config: &CrawlerConfig,
+    engine_mode: &str,
+) -> Result<(Document, Vec<String>, String)> {
     // Create a scrape request
     let scrape_request = ScrapeRequest {
         url: url.to_string(),
@@ -474,10 +493,17 @@ async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engi
     // Check if the HTTP result has thin content and we should try browser fallback
     if engine_mode == "auto" {
         let html_text_len = scraper::Html::parse_document(&raw_result.html)
-            .root_element().text().collect::<String>().trim().len();
+            .root_element()
+            .text()
+            .collect::<String>()
+            .trim()
+            .len();
 
         if html_text_len < 100 {
-            debug!("Thin content detected ({} chars) for {}, trying browser fallback", html_text_len, url);
+            debug!(
+                "Thin content detected ({} chars) for {}, trying browser fallback",
+                html_text_len, url
+            );
 
             let fallback_request = ScrapeRequest {
                 url: url.to_string(),
@@ -499,7 +525,9 @@ async fn scrape_url(url: &str, engine: &HttpEngine, config: &CrawlerConfig, engi
 
             if let Ok(response) = scrape_core_logic(&fallback_request).await {
                 if let Some(doc) = response.data {
-                    let has_good_content = doc.markdown.as_ref()
+                    let has_good_content = doc
+                        .markdown
+                        .as_ref()
                         .map(|md| md.len() > 100)
                         .unwrap_or(false);
 

@@ -38,8 +38,8 @@ use url::Url;
 /// ```
 pub fn extract_etld_plus_one(url_str: &str) -> Result<String> {
     // Parse URL
-    let url = Url::parse(url_str)
-        .map_err(|e| ScrapeError::InvalidUrl(format!("Invalid URL: {}", e)))?;
+    let url =
+        Url::parse(url_str).map_err(|e| ScrapeError::InvalidUrl(format!("Invalid URL: {}", e)))?;
 
     // Get host
     let host = url
@@ -57,7 +57,10 @@ pub fn extract_etld_plus_one(url_str: &str) -> Result<String> {
         }
         None => {
             // If PSL can't determine the domain, use the host as-is
-            debug!("PSL could not determine domain for {}, using host: {}", url_str, host);
+            debug!(
+                "PSL could not determine domain for {}, using host: {}",
+                url_str, host
+            );
             Ok(host.to_string())
         }
     }
@@ -101,11 +104,9 @@ pub fn extract_etld_plus_one_or_host(url_str: &str) -> Result<String> {
 /// ```
 pub fn extract_etld_plus_one_from_host(host: &str) -> String {
     match List.domain(host.as_bytes()) {
-        Some(domain) => {
-            std::str::from_utf8(domain.as_bytes())
-                .unwrap_or(host)
-                .to_string()
-        }
+        Some(domain) => std::str::from_utf8(domain.as_bytes())
+            .unwrap_or(host)
+            .to_string(),
         None => host.to_string(),
     }
 }
@@ -172,11 +173,26 @@ mod tests {
 
     #[test]
     fn test_extract_etld_from_host() {
-        assert_eq!(extract_etld_plus_one_from_host("example.com"), "example.com");
-        assert_eq!(extract_etld_plus_one_from_host("www.example.com"), "example.com");
-        assert_eq!(extract_etld_plus_one_from_host("api.blog.example.com"), "example.com");
-        assert_eq!(extract_etld_plus_one_from_host("www.example.co.uk"), "example.co.uk");
-        assert_eq!(extract_etld_plus_one_from_host("api.example.co.uk"), "example.co.uk");
+        assert_eq!(
+            extract_etld_plus_one_from_host("example.com"),
+            "example.com"
+        );
+        assert_eq!(
+            extract_etld_plus_one_from_host("www.example.com"),
+            "example.com"
+        );
+        assert_eq!(
+            extract_etld_plus_one_from_host("api.blog.example.com"),
+            "example.com"
+        );
+        assert_eq!(
+            extract_etld_plus_one_from_host("www.example.co.uk"),
+            "example.co.uk"
+        );
+        assert_eq!(
+            extract_etld_plus_one_from_host("api.example.co.uk"),
+            "example.co.uk"
+        );
         assert_eq!(extract_etld_plus_one_from_host("localhost"), "localhost");
     }
 
@@ -185,7 +201,10 @@ mod tests {
         // github.io is a public suffix, so user.github.io is a registrable domain
         let a = extract_etld_plus_one_from_host("user1.github.io");
         let b = extract_etld_plus_one_from_host("user2.github.io");
-        assert_ne!(a, b, "Different github.io subdomains should be different registrable domains");
+        assert_ne!(
+            a, b,
+            "Different github.io subdomains should be different registrable domains"
+        );
     }
 
     #[test]

@@ -69,7 +69,8 @@ impl PaginationDetector {
         if !self.visited_pagination.contains(current_url) {
             self.visited_pagination.insert(current_url.to_string());
             let current_depth = self.pagination_depth.get(current_url).copied().unwrap_or(0);
-            self.pagination_depth.insert(current_url.to_string(), current_depth);
+            self.pagination_depth
+                .insert(current_url.to_string(), current_depth);
         }
 
         // Check if we've hit pagination limits
@@ -124,7 +125,8 @@ impl PaginationDetector {
         }
 
         // Filter out already visited and circular references
-        let new_pages: Vec<String> = pages.into_iter()
+        let new_pages: Vec<String> = pages
+            .into_iter()
             .filter(|url| {
                 // Skip if already visited
                 if self.visited_pagination.contains(url) {
@@ -144,7 +146,8 @@ impl PaginationDetector {
 
         // Track depth for new pages
         for page in &new_pages {
-            self.pagination_depth.insert(page.clone(), current_depth + 1);
+            self.pagination_depth
+                .insert(page.clone(), current_depth + 1);
             self.visited_pagination.insert(page.clone());
         }
 
@@ -166,21 +169,27 @@ impl PaginationDetector {
         let document = Html::parse_document(html);
 
         // Check for disabled next button
-        if let Ok(sel) = Selector::parse(r#"a[rel="next"][disabled], button.next[disabled], .next[disabled]"#) {
+        if let Ok(sel) =
+            Selector::parse(r#"a[rel="next"][disabled], button.next[disabled], .next[disabled]"#)
+        {
             if document.select(&sel).next().is_some() {
                 return true;
             }
         }
 
         // Check for aria-disabled
-        if let Ok(sel) = Selector::parse(r#"[aria-label*="next" i][aria-disabled="true"], [aria-label*="next" i][disabled]"#) {
+        if let Ok(sel) = Selector::parse(
+            r#"[aria-label*="next" i][aria-disabled="true"], [aria-label*="next" i][disabled]"#,
+        ) {
             if document.select(&sel).next().is_some() {
                 return true;
             }
         }
 
         // Check for common "disabled" class patterns
-        if let Ok(sel) = Selector::parse(r#".next.disabled, .pager-next.disabled, .pagination-next.disabled"#) {
+        if let Ok(sel) =
+            Selector::parse(r#".next.disabled, .pager-next.disabled, .pagination-next.disabled"#)
+        {
             if document.select(&sel).next().is_some() {
                 return true;
             }
@@ -273,16 +282,7 @@ impl PaginationDetector {
 
         // Common pagination text patterns
         let next_patterns = [
-            "next",
-            "→",
-            "»",
-            "›",
-            "&#8594;",
-            "&#187;",
-            "&#8250;",
-            "&rarr;",
-            "&raquo;",
-            "&rsaquo;",
+            "next", "→", "»", "›", "&#8594;", "&#187;", "&#8250;", "&rarr;", "&raquo;", "&rsaquo;",
         ];
 
         for element in document.select(&selector) {
@@ -609,11 +609,17 @@ mod tests {
         // Try to detect 10 pages
         for i in 1..=10 {
             let html = format!(r#"<a href="/page/{}/" rel="next">Next</a>"#, i + 1);
-            let pages = detector.detect_pagination(&html, &format!("https://example.com/page/{}/", i));
+            let pages =
+                detector.detect_pagination(&html, &format!("https://example.com/page/{}/", i));
 
             if i >= 5 {
                 // Should return empty after limit
-                assert_eq!(pages.len(), 0, "Expected no pages after limit at iteration {}", i);
+                assert_eq!(
+                    pages.len(),
+                    0,
+                    "Expected no pages after limit at iteration {}",
+                    i
+                );
             }
         }
     }
@@ -636,8 +642,10 @@ mod tests {
         // Should skip page=1 because it's already visited, and also detect page=3 from URL pattern
         // So we expect 1 page (page=3), not 0
         // But the test intent is to verify circular detection, so let's check that page=1 is NOT in results
-        assert!(!pages.contains(&"https://example.com/articles?page=1".to_string()),
-                "Page 1 should be filtered out (circular/already visited)");
+        assert!(
+            !pages.contains(&"https://example.com/articles?page=1".to_string()),
+            "Page 1 should be filtered out (circular/already visited)"
+        );
     }
 
     #[test]
@@ -656,7 +664,7 @@ mod tests {
     fn test_depth_limit_enforced() {
         let mut detector = PaginationDetector::new(PaginationConfig {
             max_pages: 100,
-            max_depth: 2,  // Limit depth to 2
+            max_depth: 2, // Limit depth to 2
             detect_circular: true,
         });
 
@@ -682,7 +690,11 @@ mod tests {
                     "Expected no pages after depth limit at iteration {} (current_url={}, internal_depth={})",
                     iteration, current_url, detector.pagination_depth.get(&current_url).unwrap_or(&0));
             } else {
-                assert!(!pages.is_empty(), "Expected pages before depth limit at iteration {}", iteration);
+                assert!(
+                    !pages.is_empty(),
+                    "Expected pages before depth limit at iteration {}",
+                    iteration
+                );
                 current_url = pages[0].clone();
             }
         }

@@ -9,10 +9,10 @@
 
 use crate::error::{Result, ScrapeError};
 use moka::future::Cache;
-use std::sync::LazyLock;
 use reqwest::Client;
 use robotstxt::DefaultMatcher;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
 use tracing::{debug, warn};
 use url::Url;
@@ -46,11 +46,11 @@ fn extract_domain(url: &Url) -> Result<String> {
 }
 
 /// Parse Crawl-Delay directive from robots.txt
-/// 
+///
 /// Looks for lines like:
 /// - `Crawl-delay: 1`
 /// - `Crawl-Delay: 0.5`
-/// 
+///
 /// Returns the delay in seconds, or None if not specified
 fn parse_crawl_delay(robots_txt: &str, user_agent: &str) -> Option<f64> {
     let mut in_user_agent_block = false;
@@ -102,7 +102,11 @@ async fn fetch_robots_txt(domain: &str, user_agent: &str) -> Result<RobotsData> 
     };
 
     if !response.status().is_success() {
-        warn!("robots.txt not found at {} (status: {})", robots_url, response.status());
+        warn!(
+            "robots.txt not found at {} (status: {})",
+            robots_url,
+            response.status()
+        );
         // If robots.txt doesn't exist, allow by default
         return Ok(RobotsData {
             content: String::new(),
@@ -127,7 +131,7 @@ async fn fetch_robots_txt(domain: &str, user_agent: &str) -> Result<RobotsData> 
 }
 
 /// Check if a URL is allowed by robots.txt (with caching)
-/// 
+///
 /// This function:
 /// 1. Extracts the domain from the URL
 /// 2. Checks if robots.txt is cached
@@ -135,8 +139,8 @@ async fn fetch_robots_txt(domain: &str, user_agent: &str) -> Result<RobotsData> 
 /// 4. Checks if the specific path is allowed
 /// 5. Returns the crawl delay if specified
 pub async fn is_allowed_cached(url: &str, user_agent: &str) -> Result<(bool, Option<f64>)> {
-    let parsed_url = Url::parse(url)
-        .map_err(|e| ScrapeError::InvalidUrl(format!("Invalid URL: {}", e)))?;
+    let parsed_url =
+        Url::parse(url).map_err(|e| ScrapeError::InvalidUrl(format!("Invalid URL: {}", e)))?;
 
     let domain = extract_domain(&parsed_url)?;
 
@@ -233,7 +237,9 @@ crawl-delay: 1.5
             allowed: true,
         };
 
-        ROBOTS_CACHE.insert(domain.to_string(), robots_data.clone()).await;
+        ROBOTS_CACHE
+            .insert(domain.to_string(), robots_data.clone())
+            .await;
 
         // Second call - should hit cache
         let cached = ROBOTS_CACHE.get(domain).await;

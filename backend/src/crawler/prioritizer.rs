@@ -131,8 +131,9 @@ impl UrlPrioritizer {
             let path = parsed.path();
             if path == "/" || path.is_empty() {
                 priority += 100; // Very strong boost for root pages (ensures they're always first)
-            } else if path.matches('/').count() == 1 ||
-                      (path.matches('/').count() == 2 && path.ends_with('/')) {
+            } else if path.matches('/').count() == 1
+                || (path.matches('/').count() == 2 && path.ends_with('/'))
+            {
                 // Top-level path like /about or /about/
                 priority += 40; // Good boost for top-level pages
             }
@@ -202,15 +203,19 @@ mod tests {
     #[test]
     fn test_prioritized_url_ordering() {
         let prioritizer = UrlPrioritizer::new();
-        
+
         let url1 = PrioritizedUrl::new("https://example.com/page/10".to_string(), 2, &prioritizer);
-        let url2 = PrioritizedUrl::new("https://example.com/docs/guide".to_string(), 1, &prioritizer);
+        let url2 = PrioritizedUrl::new(
+            "https://example.com/docs/guide".to_string(),
+            1,
+            &prioritizer,
+        );
         let url3 = PrioritizedUrl::new("https://example.com/".to_string(), 0, &prioritizer);
-        
+
         // Higher priority should come first
         assert!(url3.priority > url2.priority);
         assert!(url2.priority > url1.priority);
-        
+
         // Test ordering
         assert_eq!(url3.cmp(&url2), Ordering::Greater);
         assert_eq!(url2.cmp(&url1), Ordering::Greater);
@@ -220,17 +225,33 @@ mod tests {
     fn test_binary_heap_ordering() {
         let prioritizer = UrlPrioritizer::new();
         let mut heap = BinaryHeap::new();
-        
+
         // Add URLs in random order
-        heap.push(PrioritizedUrl::new("https://example.com/page/10".to_string(), 2, &prioritizer));
-        heap.push(PrioritizedUrl::new("https://example.com/".to_string(), 0, &prioritizer));
-        heap.push(PrioritizedUrl::new("https://example.com/docs/guide".to_string(), 1, &prioritizer));
-        heap.push(PrioritizedUrl::new("https://example.com/login".to_string(), 2, &prioritizer));
-        
+        heap.push(PrioritizedUrl::new(
+            "https://example.com/page/10".to_string(),
+            2,
+            &prioritizer,
+        ));
+        heap.push(PrioritizedUrl::new(
+            "https://example.com/".to_string(),
+            0,
+            &prioritizer,
+        ));
+        heap.push(PrioritizedUrl::new(
+            "https://example.com/docs/guide".to_string(),
+            1,
+            &prioritizer,
+        ));
+        heap.push(PrioritizedUrl::new(
+            "https://example.com/login".to_string(),
+            2,
+            &prioritizer,
+        ));
+
         // Pop should return highest priority first (root page)
         let first = heap.pop().unwrap();
         assert_eq!(first.url, "https://example.com/");
-        
+
         // Next should be docs
         let second = heap.pop().unwrap();
         assert_eq!(second.url, "https://example.com/docs/guide");
@@ -239,10 +260,10 @@ mod tests {
     #[test]
     fn test_depth_penalty() {
         let prioritizer = UrlPrioritizer::new();
-        
+
         let shallow = prioritizer.calculate_priority("https://example.com/page", 0);
         let deep = prioritizer.calculate_priority("https://example.com/page", 5);
-        
+
         // Deeper URLs should have lower priority
         assert!(shallow > deep);
         assert_eq!(shallow - deep, 50); // 5 levels * 10 points per level
@@ -251,11 +272,11 @@ mod tests {
     #[test]
     fn test_high_priority_patterns() {
         let prioritizer = UrlPrioritizer::new();
-        
+
         let base_priority = prioritizer.calculate_priority("https://example.com/random", 0);
         let docs_priority = prioritizer.calculate_priority("https://example.com/docs/api", 0);
         let index_priority = prioritizer.calculate_priority("https://example.com/index.html", 0);
-        
+
         // Docs and index should have higher priority than random page
         assert!(docs_priority > base_priority);
         assert!(index_priority > base_priority);
@@ -264,12 +285,12 @@ mod tests {
     #[test]
     fn test_low_priority_patterns() {
         let prioritizer = UrlPrioritizer::new();
-        
+
         let base_priority = prioritizer.calculate_priority("https://example.com/article", 0);
         let pdf_priority = prioritizer.calculate_priority("https://example.com/doc.pdf", 0);
         let page10_priority = prioritizer.calculate_priority("https://example.com/page/10", 0);
         let login_priority = prioritizer.calculate_priority("https://example.com/login", 0);
-        
+
         // PDFs, high page numbers, and login should have lower priority
         assert!(pdf_priority < base_priority);
         assert!(page10_priority < base_priority);
@@ -279,13 +300,13 @@ mod tests {
     #[test]
     fn test_url_length_penalty() {
         let prioritizer = UrlPrioritizer::new();
-        
+
         let short_url = "https://example.com/page";
         let long_url = "https://example.com/very/long/path/with/many/segments/and/parameters?query=value&filter=enabled&sort=desc";
-        
+
         let short_priority = prioritizer.calculate_priority(short_url, 0);
         let long_priority = prioritizer.calculate_priority(long_url, 0);
-        
+
         // Shorter URLs should have higher priority
         assert!(short_priority > long_priority);
     }
@@ -310,11 +331,12 @@ mod tests {
             .unwrap()
             .with_low_priority_pattern(r"/ignore")
             .unwrap();
-        
-        let important_priority = prioritizer.calculate_priority("https://example.com/important/page", 0);
+
+        let important_priority =
+            prioritizer.calculate_priority("https://example.com/important/page", 0);
         let ignore_priority = prioritizer.calculate_priority("https://example.com/ignore/page", 0);
         let normal_priority = prioritizer.calculate_priority("https://example.com/normal/page", 0);
-        
+
         assert!(important_priority > normal_priority);
         assert!(ignore_priority < normal_priority);
     }
@@ -322,15 +344,15 @@ mod tests {
     #[test]
     fn test_pagination_detection() {
         let prioritizer = UrlPrioritizer::new();
-        
+
         let page1_priority = prioritizer.calculate_priority("https://example.com/blog", 0);
         let page2_priority = prioritizer.calculate_priority("https://example.com/blog/page/2", 0);
         let page10_priority = prioritizer.calculate_priority("https://example.com/blog/page/10", 0);
-        
+
         // First page should have higher priority than pagination
         assert!(page1_priority > page2_priority);
         assert!(page1_priority > page10_priority);
-        
+
         // Higher page numbers should have lower priority
         assert_eq!(page2_priority, page10_priority); // Both get the same low priority penalty
     }
@@ -338,11 +360,12 @@ mod tests {
     #[test]
     fn test_equal_priority_depth_tiebreaker() {
         let prioritizer = UrlPrioritizer::new();
-        
+
         // Two URLs with same base priority but different depths
-        let shallow = PrioritizedUrl::new("https://example.com/random1".to_string(), 1, &prioritizer);
+        let shallow =
+            PrioritizedUrl::new("https://example.com/random1".to_string(), 1, &prioritizer);
         let deep = PrioritizedUrl::new("https://example.com/random2".to_string(), 3, &prioritizer);
-        
+
         // When priorities are close, shallower depth should win
         assert!(shallow.depth < deep.depth);
     }

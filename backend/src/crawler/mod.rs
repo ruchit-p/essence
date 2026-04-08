@@ -14,8 +14,8 @@ pub mod streaming;
 pub mod url_normalization;
 
 pub use config::{CircuitBreaker, CrawlerConfig, MemoryMonitor};
-pub use dedup::ContentDeduplicator;
 pub use crawler::crawl_website;
+pub use dedup::ContentDeduplicator;
 pub use filter::matches_pattern;
 pub use mapper::discover_urls;
 pub use pagination::PaginationDetector;

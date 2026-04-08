@@ -50,18 +50,14 @@ impl DnsCache {
     /// Create a new DNS cache with specified capacity
     pub fn with_capacity(capacity: usize) -> Result<Self> {
         // Use system DNS configuration
-        let resolver = TokioAsyncResolver::tokio(
-            ResolverConfig::default(),
-            ResolverOpts::default(),
-        );
+        let resolver =
+            TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
 
         Ok(Self {
             resolver: Arc::new(resolver),
-            cache: Arc::new(Mutex::new(
-                LruCache::new(
-                    NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(1000).unwrap())
-                ),
-            )),
+            cache: Arc::new(Mutex::new(LruCache::new(
+                NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(1000).unwrap()),
+            ))),
             stats: Arc::new(Mutex::new(CacheStats::default())),
         })
     }
@@ -95,11 +91,9 @@ impl DnsCache {
             stats.misses += 1;
         }
 
-        let response = self
-            .resolver
-            .lookup_ip(domain)
-            .await
-            .map_err(|e| ScrapeError::Internal(format!("DNS lookup failed for {}: {}", domain, e)))?;
+        let response = self.resolver.lookup_ip(domain).await.map_err(|e| {
+            ScrapeError::Internal(format!("DNS lookup failed for {}: {}", domain, e))
+        })?;
 
         let ips: Vec<IpAddr> = response.iter().collect();
 
@@ -240,7 +234,7 @@ mod tests {
     #[tokio::test]
     async fn test_dns_cache_reset_stats() {
         let cache = DnsCache::new().unwrap();
-        
+
         // Manually update stats
         {
             let mut stats = cache.stats.lock().await;
@@ -261,7 +255,9 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_domain() {
         let cache = DnsCache::new().unwrap();
-        let result = cache.lookup("invalid.domain.that.does.not.exist.xyz123").await;
+        let result = cache
+            .lookup("invalid.domain.that.does.not.exist.xyz123")
+            .await;
         assert!(result.is_err());
     }
 }
