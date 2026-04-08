@@ -13,9 +13,7 @@ async fn start_webhook_receiver() -> (u16, Arc<Mutex<Vec<serde_json::Value>>>) {
     let received = Arc::new(Mutex::new(Vec::new()));
     let received_clone = received.clone();
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
 
     let app = axum::Router::new().route(

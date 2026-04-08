@@ -255,7 +255,10 @@ async fn test_ad_blocking_enabled() {
     };
 
     let result = engine.scrape(&request).await;
-    assert!(result.is_ok(), "Scrape should succeed with ad blocking enabled");
+    assert!(
+        result.is_ok(),
+        "Scrape should succeed with ad blocking enabled"
+    );
 
     let raw_result = result.unwrap();
     assert_eq!(raw_result.status_code, 200);
@@ -294,7 +297,10 @@ async fn test_ad_blocking_disabled() {
     };
 
     let result = engine.scrape(&request).await;
-    assert!(result.is_ok(), "Scrape should succeed with ad blocking disabled");
+    assert!(
+        result.is_ok(),
+        "Scrape should succeed with ad blocking disabled"
+    );
 
     let raw_result = result.unwrap();
     assert_eq!(raw_result.status_code, 200);
@@ -340,5 +346,8 @@ async fn test_ad_blocking_performance() {
     // The page should load successfully
     let raw_result = result.unwrap();
     assert_eq!(raw_result.status_code, 200);
-    assert!(raw_result.html.len() > 1000, "Should have substantial content");
+    assert!(
+        raw_result.html.len() > 1000,
+        "Should have substantial content"
+    );
 }

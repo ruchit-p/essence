@@ -192,9 +192,8 @@ fn extract_result_from_claude_output(json: &serde_json::Value) -> serde_json::Va
 /// The "result" field may be a JSON string that needs re-parsing.
 fn extract_result_text(result_obj: &serde_json::Value) -> serde_json::Value {
     if let Some(result_str) = result_obj.get("result").and_then(|r| r.as_str()) {
-        serde_json::from_str(result_str).unwrap_or_else(|_| {
-            serde_json::Value::String(result_str.to_string())
-        })
+        serde_json::from_str(result_str)
+            .unwrap_or_else(|_| serde_json::Value::String(result_str.to_string()))
     } else if let Some(result_val) = result_obj.get("result") {
         if !result_val.is_null() {
             return result_val.clone();
@@ -252,7 +251,11 @@ pub fn evaluate(
                     let result_obj = extract_result_from_claude_output(&json);
 
                     let verdict_json = if let Some(so) = result_obj.get("structured_output") {
-                        if !so.is_null() { so.clone() } else { extract_result_text(&result_obj) }
+                        if !so.is_null() {
+                            so.clone()
+                        } else {
+                            extract_result_text(&result_obj)
+                        }
                     } else {
                         extract_result_text(&result_obj)
                     };

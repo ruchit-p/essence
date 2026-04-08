@@ -1,8 +1,8 @@
+use tokio::time::Duration;
 use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
 };
-use tokio::time::Duration;
 
 #[tokio::test]
 async fn test_retry_on_500_error() {
@@ -18,7 +18,9 @@ async fn test_retry_on_500_error() {
 
     Mock::given(method("GET"))
         .and(path("/test-500"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("<html><body>Success</body></html>"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string("<html><body>Success</body></html>"),
+        )
         .expect(1)
         .mount(&mock_server)
         .await;
@@ -66,7 +68,9 @@ async fn test_retry_on_timeout() {
 
     Mock::given(method("GET"))
         .and(path("/test-timeout"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("<html><body>Success</body></html>"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string("<html><body>Success</body></html>"),
+        )
         .expect(1)
         .mount(&mock_server)
         .await;
@@ -150,7 +154,10 @@ async fn test_max_retries_exceeded() {
     }
 
     assert!(!success, "Should not succeed after max retries");
-    assert_eq!(attempts, max_retries, "Should attempt exactly max_retries times");
+    assert_eq!(
+        attempts, max_retries,
+        "Should attempt exactly max_retries times"
+    );
 }
 
 #[tokio::test]
@@ -167,7 +174,9 @@ async fn test_exponential_backoff() {
 
     Mock::given(method("GET"))
         .and(path("/test-backoff"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("<html><body>Success</body></html>"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string("<html><body>Success</body></html>"),
+        )
         .expect(1)
         .mount(&mock_server)
         .await;
@@ -198,7 +207,10 @@ async fn test_exponential_backoff() {
 
     assert!(response.is_some(), "Should eventually succeed");
     // Should have waited at least 300ms (100ms + 200ms)
-    assert!(elapsed >= Duration::from_millis(300), "Should use exponential backoff");
+    assert!(
+        elapsed >= Duration::from_millis(300),
+        "Should use exponential backoff"
+    );
 }
 
 #[tokio::test]
@@ -235,7 +247,9 @@ async fn test_custom_headers_with_retry() {
 
     Mock::given(method("GET"))
         .and(path("/test-headers"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("<html><body>Headers OK</body></html>"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_string("<html><body>Headers OK</body></html>"),
+        )
         .expect(1)
         .mount(&mock_server)
         .await;

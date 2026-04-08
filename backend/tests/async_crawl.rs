@@ -50,13 +50,7 @@ async fn test_async_crawl_invalid_url() {
 async fn test_async_crawl_missing_url() {
     let app = create_test_app();
 
-    let (status, _json) = make_request(
-        app,
-        "POST",
-        "/api/v1/crawl/async",
-        Some(json!({})),
-    )
-    .await;
+    let (status, _json) = make_request(app, "POST", "/api/v1/crawl/async", Some(json!({}))).await;
 
     // Missing required field should fail deserialization
     assert!(status == StatusCode::BAD_REQUEST || status == StatusCode::UNPROCESSABLE_ENTITY);
@@ -66,13 +60,7 @@ async fn test_async_crawl_missing_url() {
 async fn test_async_crawl_status_not_found() {
     let app = create_test_app();
 
-    let (status, json) = make_request(
-        app,
-        "GET",
-        "/api/v1/crawl/async/nonexistent-id",
-        None,
-    )
-    .await;
+    let (status, json) = make_request(app, "GET", "/api/v1/crawl/async/nonexistent-id", None).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(json["success"], false);
@@ -82,13 +70,8 @@ async fn test_async_crawl_status_not_found() {
 async fn test_cancel_nonexistent_job() {
     let app = create_test_app();
 
-    let (status, json) = make_request(
-        app,
-        "DELETE",
-        "/api/v1/crawl/async/nonexistent-id",
-        None,
-    )
-    .await;
+    let (status, json) =
+        make_request(app, "DELETE", "/api/v1/crawl/async/nonexistent-id", None).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(json["success"], false);
@@ -98,13 +81,7 @@ async fn test_cancel_nonexistent_job() {
 async fn test_list_async_crawls_empty() {
     let app = create_test_app();
 
-    let (status, json) = make_request(
-        app,
-        "GET",
-        "/api/v1/crawl/async",
-        None,
-    )
-    .await;
+    let (status, json) = make_request(app, "GET", "/api/v1/crawl/async", None).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json["success"], true);

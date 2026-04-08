@@ -282,10 +282,7 @@ async fn test_scrape_metadata_always_included() {
         metadata.get("statusCode").is_some(),
         "metadata should have statusCode"
     );
-    assert_eq!(
-        metadata["statusCode"], 200,
-        "statusCode should be 200"
-    );
+    assert_eq!(metadata["statusCode"], 200, "statusCode should be 200");
 
     // simple.html has title and description meta tags
     assert!(
@@ -332,10 +329,7 @@ async fn test_async_crawl_create_returns_202_with_job_id() {
         "Should have crawlId string"
     );
     assert_eq!(response["status"], "queued");
-    assert!(
-        response["statusUrl"].is_string(),
-        "Should have statusUrl"
-    );
+    assert!(response["statusUrl"].is_string(), "Should have statusUrl");
 
     let crawl_id = response["crawlId"].as_str().unwrap();
     let status_url = response["statusUrl"].as_str().unwrap();
@@ -383,10 +377,7 @@ async fn test_async_crawl_status_returns_correct_structure() {
     .await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(
-        poll_response["crawlId"].is_string(),
-        "Should have crawlId"
-    );
+    assert!(poll_response["crawlId"].is_string(), "Should have crawlId");
 
     let job_status = poll_response["status"].as_str().unwrap();
     assert!(
@@ -481,13 +472,7 @@ async fn test_async_crawl_list_shows_created_jobs() {
     }
 
     // List jobs
-    let (status, list_response) = make_request(
-        app,
-        "GET",
-        "/api/v1/crawl/async",
-        None,
-    )
-    .await;
+    let (status, list_response) = make_request(app, "GET", "/api/v1/crawl/async", None).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(list_response["success"], true);
@@ -592,7 +577,10 @@ async fn test_batch_scrape_sync_with_mock_urls() {
     // Each result item should have url and success fields
     for item in data {
         assert!(item["url"].is_string(), "Each item should have url");
-        assert!(item["success"].is_boolean(), "Each item should have success");
+        assert!(
+            item["success"].is_boolean(),
+            "Each item should have success"
+        );
     }
 }
 
@@ -625,10 +613,7 @@ async fn test_batch_scrape_async_returns_202_with_batch_id() {
 
     assert_eq!(status, StatusCode::ACCEPTED, "Should return 202 Accepted");
     assert_eq!(response["success"], true);
-    assert!(
-        response["batchId"].is_string(),
-        "Should have batchId"
-    );
+    assert!(response["batchId"].is_string(), "Should have batchId");
     assert_eq!(response["status"], "queued");
     assert_eq!(response["totalUrls"], 2);
 }
@@ -641,13 +626,8 @@ async fn test_batch_scrape_async_returns_202_with_batch_id() {
 async fn test_not_found_error_format() {
     let app = create_test_app();
 
-    let (status, response) = make_request(
-        app,
-        "GET",
-        "/api/v1/crawl/async/nonexistent-uuid",
-        None,
-    )
-    .await;
+    let (status, response) =
+        make_request(app, "GET", "/api/v1/crawl/async/nonexistent-uuid", None).await;
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(response["success"], false);
@@ -720,17 +700,19 @@ async fn test_all_routes_registered() {
         })),
     )
     .await;
-    assert_ne!(status, StatusCode::NOT_FOUND, "POST /api/v1/crawl/async should be registered");
+    assert_ne!(
+        status,
+        StatusCode::NOT_FOUND,
+        "POST /api/v1/crawl/async should be registered"
+    );
 
     // GET /api/v1/crawl/async should not 404
-    let (status, _) = make_request(
-        app.clone(),
-        "GET",
-        "/api/v1/crawl/async",
-        None,
-    )
-    .await;
-    assert_ne!(status, StatusCode::NOT_FOUND, "GET /api/v1/crawl/async should be registered");
+    let (status, _) = make_request(app.clone(), "GET", "/api/v1/crawl/async", None).await;
+    assert_ne!(
+        status,
+        StatusCode::NOT_FOUND,
+        "GET /api/v1/crawl/async should be registered"
+    );
 
     // POST /api/v1/batch/scrape should not 404 (send empty to get 400, not 404)
     let (status, _) = make_request(
@@ -740,7 +722,11 @@ async fn test_all_routes_registered() {
         Some(json!({"urls": []})),
     )
     .await;
-    assert_ne!(status, StatusCode::NOT_FOUND, "POST /api/v1/batch/scrape should be registered");
+    assert_ne!(
+        status,
+        StatusCode::NOT_FOUND,
+        "POST /api/v1/batch/scrape should be registered"
+    );
 
     // POST /api/v1/batch/scrape/async should not 404
     let (status, _) = make_request(
@@ -750,15 +736,17 @@ async fn test_all_routes_registered() {
         Some(json!({"urls": []})),
     )
     .await;
-    assert_ne!(status, StatusCode::NOT_FOUND, "POST /api/v1/batch/scrape/async should be registered");
+    assert_ne!(
+        status,
+        StatusCode::NOT_FOUND,
+        "POST /api/v1/batch/scrape/async should be registered"
+    );
 
     // GET /health should not 404
-    let (status, _) = make_request(
-        app,
-        "GET",
-        "/health",
-        None,
-    )
-    .await;
-    assert_ne!(status, StatusCode::NOT_FOUND, "GET /health should be registered");
+    let (status, _) = make_request(app, "GET", "/health", None).await;
+    assert_ne!(
+        status,
+        StatusCode::NOT_FOUND,
+        "GET /health should be registered"
+    );
 }

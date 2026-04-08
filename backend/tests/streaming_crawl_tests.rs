@@ -1,5 +1,5 @@
-use essence::types::{CrawlEvent, CrawlRequest};
 use essence::crawler::crawl_website_stream;
+use essence::types::{CrawlEvent, CrawlRequest};
 use tokio::sync::mpsc;
 
 #[tokio::test]
@@ -25,9 +25,7 @@ async fn test_streaming_crawl_basic() {
     };
 
     // Spawn crawl task
-    let crawl_handle = tokio::spawn(async move {
-        crawl_website_stream(request, tx).await
-    });
+    let crawl_handle = tokio::spawn(async move { crawl_website_stream(request, tx).await });
 
     // Collect events
     let mut events = Vec::new();
@@ -41,10 +39,16 @@ async fn test_streaming_crawl_basic() {
                 match &event {
                     CrawlEvent::Status { .. } => status_count += 1,
                     CrawlEvent::Document { .. } => document_count += 1,
-                    CrawlEvent::Complete { total_pages, success, errors } => {
+                    CrawlEvent::Complete {
+                        total_pages,
+                        success,
+                        errors,
+                    } => {
                         complete_count += 1;
-                        println!("Crawl completed: {} total, {} success, {} errors", 
-                            total_pages, success, errors);
+                        println!(
+                            "Crawl completed: {} total, {} success, {} errors",
+                            total_pages, success, errors
+                        );
                     }
                     CrawlEvent::Error { url, error } => {
                         println!("Error crawling {}: {}", url, error);
@@ -65,7 +69,10 @@ async fn test_streaming_crawl_basic() {
     // Verify we got events
     assert!(status_count > 0, "Should receive status events");
     assert!(document_count > 0, "Should receive document events");
-    assert_eq!(complete_count, 1, "Should receive exactly one complete event");
+    assert_eq!(
+        complete_count, 1,
+        "Should receive exactly one complete event"
+    );
 }
 
 #[tokio::test]
@@ -119,7 +126,7 @@ async fn test_streaming_crawl_with_limit() {
     });
 
     let mut document_count = 0;
-    
+
     while let Some(event_result) = rx.recv().await {
         if let Ok(CrawlEvent::Document { .. }) = event_result {
             document_count += 1;
@@ -127,8 +134,12 @@ async fn test_streaming_crawl_with_limit() {
     }
 
     // Should not exceed the limit
-    assert!(document_count <= limit as usize, 
-        "Document count {} should not exceed limit {}", document_count, limit);
+    assert!(
+        document_count <= limit as usize,
+        "Document count {} should not exceed limit {}",
+        document_count,
+        limit
+    );
 }
 
 #[tokio::test]
@@ -151,16 +162,17 @@ async fn test_streaming_crawl_client_disconnect() {
         engine: None,
     };
 
-    let crawl_handle = tokio::spawn(async move {
-        crawl_website_stream(request, tx).await
-    });
+    let crawl_handle = tokio::spawn(async move { crawl_website_stream(request, tx).await });
 
     // Drop receiver immediately to simulate client disconnect
     drop(rx);
 
     // Crawl should handle disconnection gracefully
     let result = crawl_handle.await.unwrap();
-    assert!(result.is_ok(), "Crawl should handle client disconnect gracefully");
+    assert!(
+        result.is_ok(),
+        "Crawl should handle client disconnect gracefully"
+    );
 }
 
 #[tokio::test]
@@ -196,8 +208,10 @@ async fn test_streaming_event_order() {
 
     // Last event should be Complete
     if let Some(last_event) = events.last() {
-        assert!(matches!(last_event, CrawlEvent::Complete { .. }), 
-            "Last event should be Complete");
+        assert!(
+            matches!(last_event, CrawlEvent::Complete { .. }),
+            "Last event should be Complete"
+        );
     } else {
         panic!("No events received");
     }

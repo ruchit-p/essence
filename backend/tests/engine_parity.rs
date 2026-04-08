@@ -403,14 +403,16 @@ async fn test_engine_parity_extended() {
         env::var("ENGINE_B_BASE").expect("ENGINE_B_BASE environment variable must be set");
 
     // Extended URL list from test corpus
-    let test_urls = ["https://example.com",
+    let test_urls = [
+        "https://example.com",
         "https://example.org",
         "https://quotes.toscrape.com",
         "https://books.toscrape.com",
         "https://httpbin.org/html",
         "https://httpbin.org/delay/2",
         "https://developer.mozilla.org/en-US/docs/Web/HTML",
-        "https://ogp.me"];
+        "https://ogp.me",
+    ];
 
     println!("\n{}", "=".repeat(80));
     println!("EXTENDED ENGINE PARITY TEST");

@@ -235,10 +235,7 @@ fn score_reliability(success: bool) -> f64 {
 /// Read the current cycle number from scores.json if it exists
 fn read_current_cycle() -> u32 {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let scores_path = manifest_dir
-        .parent()
-        .unwrap()
-        .join("docs/loop/scores.json");
+    let scores_path = manifest_dir.parent().unwrap().join("docs/loop/scores.json");
 
     if let Ok(content) = fs::read_to_string(&scores_path) {
         if let Ok(scores) = serde_json::from_str::<ScoresOutput>(&content) {
@@ -362,8 +359,7 @@ async fn quality_loop_run() {
                 success_rate: success_count as f64 / count as f64,
                 avg_markdown_quality: scores.iter().map(|s| s.markdown_quality).sum::<f64>()
                     / count as f64,
-                avg_completeness: scores.iter().map(|s| s.completeness).sum::<f64>()
-                    / count as f64,
+                avg_completeness: scores.iter().map(|s| s.completeness).sum::<f64>() / count as f64,
                 avg_speed: scores.iter().map(|s| s.speed).sum::<f64>() / count as f64,
                 avg_reliability: scores.iter().map(|s| s.reliability).sum::<f64>() / count as f64,
                 avg_overall: scores.iter().map(|s| s.overall).sum::<f64>() / count as f64,
@@ -372,8 +368,7 @@ async fn quality_loop_run() {
     }
 
     let total_success = url_scores.iter().filter(|s| s.success).count();
-    let overall_score =
-        url_scores.iter().map(|s| s.overall).sum::<f64>() / url_scores.len() as f64;
+    let overall_score = url_scores.iter().map(|s| s.overall).sum::<f64>() / url_scores.len() as f64;
 
     // Print summary
     println!("\n{}", "=".repeat(80));
@@ -441,10 +436,7 @@ async fn quality_loop_run() {
     };
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let scores_path = manifest_dir
-        .parent()
-        .unwrap()
-        .join("docs/loop/scores.json");
+    let scores_path = manifest_dir.parent().unwrap().join("docs/loop/scores.json");
     let json = serde_json::to_string_pretty(&output).unwrap();
     fs::write(&scores_path, &json).expect("Failed to write scores.json");
     println!("\nScores written to: {:?}", scores_path);

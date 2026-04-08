@@ -418,7 +418,8 @@ async fn benchmark_quick_check() {
     println!("{}", "=".repeat(80));
 
     let config = get_bench_config();
-    let quick_urls = [TestUrl {
+    let quick_urls = [
+        TestUrl {
             category: "static_docs".to_string(),
             url: "https://example.com".to_string(),
             description: "Example.com - quick check".to_string(),
@@ -427,7 +428,8 @@ async fn benchmark_quick_check() {
             category: "http".to_string(),
             url: "https://httpbin.org/html".to_string(),
             description: "httpbin.org - HTML response".to_string(),
-        }];
+        },
+    ];
 
     let mut all_metrics = Vec::new();
 

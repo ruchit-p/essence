@@ -27,7 +27,10 @@ async fn test_dns_cache_performance_improvement() {
 
     // Verify cache hit is faster
     println!("DNS lookup times:");
-    println!("  Cache miss: {:.2}ms", miss_duration.as_secs_f64() * 1000.0);
+    println!(
+        "  Cache miss: {:.2}ms",
+        miss_duration.as_secs_f64() * 1000.0
+    );
     println!("  Cache hit:  {:.2}ms", hit_duration.as_secs_f64() * 1000.0);
 
     // Cache hit should be significantly faster (typically <1ms vs 10-50ms)
@@ -38,7 +41,11 @@ async fn test_dns_cache_performance_improvement() {
     );
 
     // Verify results are the same
-    assert_eq!(result1.unwrap(), result2.unwrap(), "Cached result should match original");
+    assert_eq!(
+        result1.unwrap(),
+        result2.unwrap(),
+        "Cached result should match original"
+    );
 }
 
 #[tokio::test]
@@ -115,8 +122,14 @@ async fn test_dns_cache_with_http_engine() {
     assert!(result2.is_ok(), "Second scrape failed: {:?}", result2.err());
 
     println!("HTTP engine scrape times:");
-    println!("  First (DNS miss):  {:.2}ms", first_duration.as_secs_f64() * 1000.0);
-    println!("  Second (DNS hit):  {:.2}ms", second_duration.as_secs_f64() * 1000.0);
+    println!(
+        "  First (DNS miss):  {:.2}ms",
+        first_duration.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  Second (DNS hit):  {:.2}ms",
+        second_duration.as_secs_f64() * 1000.0
+    );
 
     // Get DNS stats
     let dns_stats = engine.dns_stats().await;
@@ -127,7 +140,10 @@ async fn test_dns_cache_with_http_engine() {
     println!("  Hit rate: {:.1}%", dns_stats.hit_rate() * 100.0);
 
     // Should have at least one cache hit from repeated domain
-    assert!(dns_stats.lookups >= 2, "Should have performed multiple DNS lookups");
+    assert!(
+        dns_stats.lookups >= 2,
+        "Should have performed multiple DNS lookups"
+    );
 }
 
 #[tokio::test]
@@ -137,7 +153,7 @@ async fn test_dns_cache_eviction() {
 
     // The cache should work even with small capacity
     let _ = cache.lookup("localhost").await;
-    
+
     let size = cache.size().await;
     assert!(size <= 2, "Cache size should not exceed capacity");
 }

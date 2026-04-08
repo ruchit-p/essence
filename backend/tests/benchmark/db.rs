@@ -272,7 +272,9 @@ pub fn git_commit_hash() -> String {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+                String::from_utf8(o.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
             } else {
                 None
             }
@@ -438,18 +440,34 @@ pub fn insert_llm_verdict(
         params![
             run_id,
             url,
-            verdict["content_relevance"]["winner"].as_str().unwrap_or("tie"),
-            verdict["content_relevance"]["reasoning"].as_str().unwrap_or(""),
+            verdict["content_relevance"]["winner"]
+                .as_str()
+                .unwrap_or("tie"),
+            verdict["content_relevance"]["reasoning"]
+                .as_str()
+                .unwrap_or(""),
             verdict["noise_removal"]["winner"].as_str().unwrap_or("tie"),
             verdict["noise_removal"]["reasoning"].as_str().unwrap_or(""),
             verdict["readability"]["winner"].as_str().unwrap_or("tie"),
             verdict["readability"]["reasoning"].as_str().unwrap_or(""),
-            verdict["structural_coherence"]["winner"].as_str().unwrap_or("tie"),
-            verdict["structural_coherence"]["reasoning"].as_str().unwrap_or(""),
-            verdict["information_completeness"]["winner"].as_str().unwrap_or("tie"),
-            verdict["information_completeness"]["reasoning"].as_str().unwrap_or(""),
-            verdict["token_efficiency"]["winner"].as_str().unwrap_or("tie"),
-            verdict["token_efficiency"]["reasoning"].as_str().unwrap_or(""),
+            verdict["structural_coherence"]["winner"]
+                .as_str()
+                .unwrap_or("tie"),
+            verdict["structural_coherence"]["reasoning"]
+                .as_str()
+                .unwrap_or(""),
+            verdict["information_completeness"]["winner"]
+                .as_str()
+                .unwrap_or("tie"),
+            verdict["information_completeness"]["reasoning"]
+                .as_str()
+                .unwrap_or(""),
+            verdict["token_efficiency"]["winner"]
+                .as_str()
+                .unwrap_or("tie"),
+            verdict["token_efficiency"]["reasoning"]
+                .as_str()
+                .unwrap_or(""),
             verdict["overall_winner"].as_str().unwrap_or("tie"),
             verdict["overall_reasoning"].as_str().unwrap_or(""),
             model,
@@ -546,8 +564,12 @@ pub fn load_latest_url_results(conn: &Connection) -> SqliteResult<Vec<UrlResultR
             f_has_description: row.get::<_, i64>(26)? != 0,
             overall_winner: row.get(27)?,
             essence_advantage: row.get(28)?,
-            quality_winner: row.get::<_, String>(29).unwrap_or_else(|_| "pending".to_string()),
-            speed_winner: row.get::<_, String>(30).unwrap_or_else(|_| "tie".to_string()),
+            quality_winner: row
+                .get::<_, String>(29)
+                .unwrap_or_else(|_| "pending".to_string()),
+            speed_winner: row
+                .get::<_, String>(30)
+                .unwrap_or_else(|_| "tie".to_string()),
             w_word_count: row.get(31)?,
             w_heading_preservation: row.get(32)?,
             w_link_preservation: row.get(33)?,
@@ -662,7 +684,9 @@ pub fn load_category_win_rates(
     )?;
 
     let rows: std::collections::HashMap<String, f64> = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+        })?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -762,11 +786,12 @@ pub fn load_category_trends(
 
 /// Load quality (LLM) win rate trend over time
 pub fn load_quality_trend(conn: &Connection) -> SqliteResult<Vec<(i64, f64)>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, quality_win_rate FROM benchmark_runs ORDER BY id ASC",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, quality_win_rate FROM benchmark_runs ORDER BY id ASC")?;
     let rows = stmt
-        .query_map([], |row| Ok((row.get(0)?, row.get::<_, f64>(1).unwrap_or(0.0))))?
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get::<_, f64>(1).unwrap_or(0.0)))
+        })?
         .filter_map(|r| r.ok())
         .collect();
     Ok(rows)

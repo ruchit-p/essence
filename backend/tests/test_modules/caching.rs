@@ -127,9 +127,21 @@ async fn test_cache_delete() {
 async fn test_cache_clear() {
     let cache = MemoryCache::new();
 
-    cache.set("key1".to_string(), "value1".to_string(), Duration::from_secs(60));
-    cache.set("key2".to_string(), "value2".to_string(), Duration::from_secs(60));
-    cache.set("key3".to_string(), "value3".to_string(), Duration::from_secs(60));
+    cache.set(
+        "key1".to_string(),
+        "value1".to_string(),
+        Duration::from_secs(60),
+    );
+    cache.set(
+        "key2".to_string(),
+        "value2".to_string(),
+        Duration::from_secs(60),
+    );
+    cache.set(
+        "key3".to_string(),
+        "value3".to_string(),
+        Duration::from_secs(60),
+    );
 
     assert_eq!(cache.len(), 3);
 
@@ -170,8 +182,16 @@ async fn test_cache_concurrent_access() {
 async fn test_cache_with_different_ttls() {
     let cache = MemoryCache::new();
 
-    cache.set("short".to_string(), "short_value".to_string(), Duration::from_millis(100));
-    cache.set("long".to_string(), "long_value".to_string(), Duration::from_secs(60));
+    cache.set(
+        "short".to_string(),
+        "short_value".to_string(),
+        Duration::from_millis(100),
+    );
+    cache.set(
+        "long".to_string(),
+        "long_value".to_string(),
+        Duration::from_secs(60),
+    );
 
     // Both should exist initially
     assert!(cache.get("short").is_some());
@@ -198,8 +218,16 @@ async fn test_cache_key_generation() {
     let key2 = format!("url:{}", url2);
     let key1_dup = format!("url:{}", url1_duplicate);
 
-    cache.set(key1.clone(), "content1".to_string(), Duration::from_secs(60));
-    cache.set(key2.clone(), "content2".to_string(), Duration::from_secs(60));
+    cache.set(
+        key1.clone(),
+        "content1".to_string(),
+        Duration::from_secs(60),
+    );
+    cache.set(
+        key2.clone(),
+        "content2".to_string(),
+        Duration::from_secs(60),
+    );
 
     // Same URL should retrieve same content
     assert_eq!(cache.get(&key1_dup).unwrap(), "content1");

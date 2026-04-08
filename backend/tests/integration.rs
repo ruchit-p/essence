@@ -5,8 +5,8 @@
 mod api;
 
 use api::{create_app, metrics::ScrapeMetrics, send_scrape_request};
-use essence::types::CrawlRequest;
 use essence::crawler::crawl_website;
+use essence::types::CrawlRequest;
 use serde_json::json;
 use std::time::Instant;
 
@@ -960,6 +960,12 @@ async fn test_pagination_detection() {
         }
     });
 
-    assert!(has_page_2, "Should find page 2 through pagination detection");
-    assert!(has_page_3, "Should find page 3 through pagination detection");
+    assert!(
+        has_page_2,
+        "Should find page 2 through pagination detection"
+    );
+    assert!(
+        has_page_3,
+        "Should find page 3 through pagination detection"
+    );
 }

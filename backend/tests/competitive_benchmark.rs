@@ -206,11 +206,9 @@ fn load_benchmark_corpus() -> Vec<BenchmarkUrl> {
         )
     });
 
-    let subset_filter: Option<Vec<String>> = std::env::var("BENCHMARK_SUBSET").ok().map(|s| {
-        s.split(',')
-            .map(|c| c.trim().to_string())
-            .collect()
-    });
+    let subset_filter: Option<Vec<String>> = std::env::var("BENCHMARK_SUBSET")
+        .ok()
+        .map(|s| s.split(',').map(|c| c.trim().to_string()).collect());
 
     let mut urls = Vec::new();
     for line in content.lines() {
@@ -301,12 +299,13 @@ fn compute_objective_metrics(
 
     let html_artifact_count = markdown.matches("</").count();
 
-    let empty_link_count = markdown.match_indices("[](")
+    let empty_link_count = markdown
+        .match_indices("[](")
         .filter(|(pos, _)| *pos == 0 || markdown.as_bytes()[pos - 1] != b'!')
         .count();
 
-    let base64_count = markdown.matches("data:image/").count()
-        + markdown.matches("data:application/").count();
+    let base64_count =
+        markdown.matches("data:image/").count() + markdown.matches("data:application/").count();
 
     let content_density = if markdown.len() > 0 {
         (word_count as f64) / (markdown.len() as f64 / 1024.0)
@@ -411,10 +410,7 @@ async fn scrape_with_firecrawl(
         Ok(resp) => {
             if let Ok(body) = resp.json::<serde_json::Value>().await {
                 let success = body["success"].as_bool().unwrap_or(false);
-                let markdown = body["data"]["markdown"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string();
+                let markdown = body["data"]["markdown"].as_str().unwrap_or("").to_string();
 
                 let metadata = &body["data"]["metadata"];
                 let has_title = metadata["title"].is_string()
@@ -427,12 +423,7 @@ async fn scrape_with_firecrawl(
                 let image_count = markdown.matches("![").count();
 
                 let error = if !success {
-                    Some(
-                        body["error"]
-                            .as_str()
-                            .unwrap_or("Unknown")
-                            .to_string(),
-                    )
+                    Some(body["error"].as_str().unwrap_or("Unknown").to_string())
                 } else {
                     None
                 };
@@ -545,10 +536,7 @@ fn winner_metadata(e: &ObjectiveMetrics, f: &ObjectiveMetrics) -> String {
 fn compare_metrics(essence: &ObjectiveMetrics, firecrawl: &ObjectiveMetrics) -> DimensionWinners {
     DimensionWinners {
         word_count: winner_higher_better(essence.word_count, firecrawl.word_count),
-        heading_preservation: winner_higher_better(
-            essence.heading_count,
-            firecrawl.heading_count,
-        ),
+        heading_preservation: winner_higher_better(essence.heading_count, firecrawl.heading_count),
         link_preservation: winner_higher_better(essence.link_count, firecrawl.link_count),
         image_preservation: winner_higher_better(essence.image_count, firecrawl.image_count),
         code_block_preservation: winner_higher_better(
@@ -617,12 +605,7 @@ fn overall_winner(winners: &DimensionWinners) -> (String, f64) {
 // MARK: - Markdown Output Saving
 
 /// Optionally save raw markdown outputs for manual comparison
-fn save_markdown_output(
-    base_dir: &PathBuf,
-    url: &str,
-    engine: &str,
-    markdown: &str,
-) {
+fn save_markdown_output(base_dir: &PathBuf, url: &str, engine: &str, markdown: &str) {
     let sanitized_url = url
         .replace("https://", "")
         .replace("http://", "")
@@ -694,7 +677,8 @@ async fn competitive_benchmark_run() {
     let mut comparisons: Vec<UrlComparison> = Vec::new();
 
     // LLM judge setup: non-blocking, fires during scraping
-    let llm_enabled = benchmark::llm_judge::is_enabled() && benchmark::llm_judge::is_claude_available();
+    let llm_enabled =
+        benchmark::llm_judge::is_enabled() && benchmark::llm_judge::is_claude_available();
     let llm_concurrency: usize = std::env::var("LLM_JUDGE_CONCURRENCY")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -707,7 +691,9 @@ async fn competitive_benchmark_run() {
         println!("LLM Judge: OFF (set LLM_JUDGE=true to enable)");
     }
     let llm_sem = Arc::new(Semaphore::new(llm_concurrency));
-    let mut llm_handles: Vec<tokio::task::JoinHandle<(usize, String, benchmark::llm_judge::EvalResult)>> = Vec::new();
+    let mut llm_handles: Vec<
+        tokio::task::JoinHandle<(usize, String, benchmark::llm_judge::EvalResult)>,
+    > = Vec::new();
 
     for (i, bench_url) in corpus.iter().enumerate() {
         println!(
@@ -778,9 +764,17 @@ async fn competitive_benchmark_run() {
 
         // --- Scrape with Firecrawl ---
         let (firecrawl_metrics, f_markdown_raw) = if firecrawl_reachable {
-            let (f_success, f_markdown, f_has_title, f_has_description, f_link_count, f_image_count, f_elapsed, f_error) =
-                scrape_with_firecrawl(&http_client, &firecrawl_url, &bench_url.url, timeout_ms)
-                    .await;
+            let (
+                f_success,
+                f_markdown,
+                f_has_title,
+                f_has_description,
+                f_link_count,
+                f_image_count,
+                f_elapsed,
+                f_error,
+            ) = scrape_with_firecrawl(&http_client, &firecrawl_url, &bench_url.url, timeout_ms)
+                .await;
 
             if save_markdown {
                 save_markdown_output(&markdown_dir, &bench_url.url, "essence", &e_markdown);
@@ -811,28 +805,29 @@ async fn competitive_benchmark_run() {
         } else {
             // Load from baselines if available, otherwise use empty metrics
             println!(" (no Firecrawl)");
-            let metrics = load_firecrawl_baseline(&output_dir, &bench_url.url).unwrap_or_else(|| {
-                ObjectiveMetrics {
-                    success: false,
-                    error: Some("Firecrawl not available".to_string()),
-                    word_count: 0,
-                    markdown_length: 0,
-                    heading_count: 0,
-                    link_count: 0,
-                    image_count: 0,
-                    code_block_count: 0,
-                    table_count: 0,
-                    html_artifact_count: 0,
-                    empty_link_count: 0,
-                    base64_count: 0,
-                    content_density: 0.0,
-                    list_count: 0,
-                    has_title: false,
-                    has_description: false,
-                    response_time_ms: 0,
-                    content_hash: String::new(),
-                }
-            });
+            let metrics =
+                load_firecrawl_baseline(&output_dir, &bench_url.url).unwrap_or_else(|| {
+                    ObjectiveMetrics {
+                        success: false,
+                        error: Some("Firecrawl not available".to_string()),
+                        word_count: 0,
+                        markdown_length: 0,
+                        heading_count: 0,
+                        link_count: 0,
+                        image_count: 0,
+                        code_block_count: 0,
+                        table_count: 0,
+                        html_artifact_count: 0,
+                        empty_link_count: 0,
+                        base64_count: 0,
+                        content_density: 0.0,
+                        list_count: 0,
+                        has_title: false,
+                        has_description: false,
+                        response_time_ms: 0,
+                        content_hash: String::new(),
+                    }
+                });
             (metrics, String::new())
         };
 
@@ -891,7 +886,10 @@ async fn competitive_benchmark_run() {
     // MARK: - Collect LLM Judge Results (non-blocking, fired during scraping)
 
     if !llm_handles.is_empty() {
-        println!("\nWaiting for {} LLM judge evaluations to complete...", llm_handles.len());
+        println!(
+            "\nWaiting for {} LLM judge evaluations to complete...",
+            llm_handles.len()
+        );
         let llm_results = futures::future::join_all(llm_handles).await;
         let mut llm_ok = 0usize;
         let mut llm_err = 0usize;
@@ -904,7 +902,10 @@ async fn competitive_benchmark_run() {
                     let winner = eval_result.raw_json["overall_winner"]
                         .as_str()
                         .unwrap_or("tie");
-                    println!("  LLM {} ... {} ({}ms)", comp_url, winner, eval_result.elapsed_ms);
+                    println!(
+                        "  LLM {} ... {} ({}ms)",
+                        comp_url, winner, eval_result.elapsed_ms
+                    );
                     comparisons[idx].quality_winner = winner.to_string();
                     comparisons[idx].llm_verdict = Some(eval_result.raw_json);
                     llm_ok += 1;
@@ -933,9 +934,18 @@ async fn competitive_benchmark_run() {
     let essence_win_rate = essence_wins as f64 / total.max(1) as f64;
 
     // Quality leaderboard (LLM judge)
-    let quality_wins_essence = comparisons.iter().filter(|c| c.quality_winner == "essence").count();
-    let quality_wins_firecrawl = comparisons.iter().filter(|c| c.quality_winner == "firecrawl").count();
-    let quality_ties = comparisons.iter().filter(|c| c.quality_winner == "tie").count();
+    let quality_wins_essence = comparisons
+        .iter()
+        .filter(|c| c.quality_winner == "essence")
+        .count();
+    let quality_wins_firecrawl = comparisons
+        .iter()
+        .filter(|c| c.quality_winner == "firecrawl")
+        .count();
+    let quality_ties = comparisons
+        .iter()
+        .filter(|c| c.quality_winner == "tie")
+        .count();
     let quality_evaluated = quality_wins_essence + quality_wins_firecrawl + quality_ties;
     let quality_win_rate = if quality_evaluated > 0 {
         quality_wins_essence as f64 / quality_evaluated as f64
@@ -944,9 +954,18 @@ async fn competitive_benchmark_run() {
     };
 
     // Speed leaderboard
-    let speed_wins_essence = comparisons.iter().filter(|c| c.speed_winner == "essence").count();
-    let speed_wins_firecrawl = comparisons.iter().filter(|c| c.speed_winner == "firecrawl").count();
-    let speed_ties = comparisons.iter().filter(|c| c.speed_winner == "tie").count();
+    let speed_wins_essence = comparisons
+        .iter()
+        .filter(|c| c.speed_winner == "essence")
+        .count();
+    let speed_wins_firecrawl = comparisons
+        .iter()
+        .filter(|c| c.speed_winner == "firecrawl")
+        .count();
+    let speed_ties = comparisons
+        .iter()
+        .filter(|c| c.speed_winner == "tie")
+        .count();
     let speed_win_rate = speed_wins_essence as f64 / total.max(1) as f64;
 
     let essence_successes = comparisons.iter().filter(|c| c.essence.success).count();
@@ -964,7 +983,10 @@ async fn competitive_benchmark_run() {
     let mut categories: Vec<CategoryComparison> = cat_groups
         .iter()
         .map(|(cat, comps)| {
-            let e_wins = comps.iter().filter(|c| c.overall_winner == "essence").count();
+            let e_wins = comps
+                .iter()
+                .filter(|c| c.overall_winner == "essence")
+                .count();
             let f_wins = comps
                 .iter()
                 .filter(|c| c.overall_winner == "firecrawl")
@@ -978,7 +1000,10 @@ async fn competitive_benchmark_run() {
                 firecrawl_wins: f_wins,
                 ties: t,
                 essence_win_rate: e_wins as f64 / comps.len().max(1) as f64,
-                avg_essence_words: comps.iter().map(|c| c.essence.word_count as f64).sum::<f64>()
+                avg_essence_words: comps
+                    .iter()
+                    .map(|c| c.essence.word_count as f64)
+                    .sum::<f64>()
                     / comps.len() as f64,
                 avg_firecrawl_words: comps
                     .iter()
@@ -1009,11 +1034,7 @@ async fn competitive_benchmark_run() {
         })
         .collect();
 
-    categories.sort_by(|a, b| {
-        b.essence_win_rate
-            .partial_cmp(&a.essence_win_rate)
-            .unwrap()
-    });
+    categories.sort_by(|a, b| b.essence_win_rate.partial_cmp(&a.essence_win_rate).unwrap());
 
     // Dimension-level win rates
     let mut dimension_wins: HashMap<String, (usize, usize)> = HashMap::new();
@@ -1055,7 +1076,9 @@ async fn competitive_benchmark_run() {
         println!("\n  === QUALITY LEADERBOARD (LLM Judge) ===");
         println!(
             "  Essence {} - {} Firecrawl ({} ties) | {:.1}% quality win rate",
-            quality_wins_essence, quality_wins_firecrawl, quality_ties,
+            quality_wins_essence,
+            quality_wins_firecrawl,
+            quality_ties,
             quality_win_rate * 100.0
         );
     }
@@ -1063,14 +1086,18 @@ async fn competitive_benchmark_run() {
     println!("\n  === SPEED LEADERBOARD ===");
     println!(
         "  Essence {} - {} Firecrawl ({} ties) | {:.1}% speed win rate",
-        speed_wins_essence, speed_wins_firecrawl, speed_ties,
+        speed_wins_essence,
+        speed_wins_firecrawl,
+        speed_ties,
         speed_win_rate * 100.0
     );
 
     println!("\n  === HEURISTIC (Artifact Counting — diagnostic) ===");
     println!(
         "  Essence {} - {} Firecrawl ({} ties) | {:.1}% heuristic win rate",
-        essence_wins, firecrawl_wins, ties,
+        essence_wins,
+        firecrawl_wins,
+        ties,
         essence_win_rate * 100.0
     );
     println!(
@@ -1103,12 +1130,7 @@ async fn competitive_benchmark_run() {
     for (dim, rate) in &dims {
         let bar_len = (*rate * 30.0) as usize;
         let bar: String = "#".repeat(bar_len);
-        println!(
-            "  {:25} {:>5.1}% {}",
-            dim,
-            *rate * 100.0,
-            bar
-        );
+        println!("  {:25} {:>5.1}% {}", dim, *rate * 100.0, bar);
     }
 
     // Print Firecrawl wins (areas to improve)
@@ -1194,7 +1216,10 @@ async fn competitive_benchmark_run() {
                 ("heading_preservation", &c.winners.heading_preservation),
                 ("link_preservation", &c.winners.link_preservation),
                 ("image_preservation", &c.winners.image_preservation),
-                ("code_block_preservation", &c.winners.code_block_preservation),
+                (
+                    "code_block_preservation",
+                    &c.winners.code_block_preservation,
+                ),
                 ("markdown_cleanliness", &c.winners.markdown_cleanliness),
                 ("content_density", &c.winners.content_density),
                 ("metadata_extraction", &c.winners.metadata_extraction),
@@ -1262,14 +1287,13 @@ async fn competitive_benchmark_run() {
                     for comp in &comparisons {
                         if let Some(ref verdict) = comp.llm_verdict {
                             if let Err(e) = benchmark::db::insert_llm_verdict(
-                                &conn,
-                                run_id,
-                                &comp.url,
-                                verdict,
-                                "claude",
+                                &conn, run_id, &comp.url, verdict, "claude",
                                 0, // elapsed tracked per-verdict during collection
                             ) {
-                                eprintln!("SQLite: Failed to insert LLM verdict for {}: {}", comp.url, e);
+                                eprintln!(
+                                    "SQLite: Failed to insert LLM verdict for {}: {}",
+                                    comp.url, e
+                                );
                             }
                         }
                     }
@@ -1355,18 +1379,12 @@ async fn essence_benchmark_run() {
 
         let success = response["success"].as_bool().unwrap_or(false);
         let markdown = response["data"]["markdown"].as_str().unwrap_or("");
-        let metrics =
-            ScrapeMetrics::from_response(bench_url.url.clone(), &response, elapsed);
+        let metrics = ScrapeMetrics::from_response(bench_url.url.clone(), &response, elapsed);
 
         let objective = compute_objective_metrics(
             success,
             if !success {
-                Some(
-                    response["error"]
-                        .as_str()
-                        .unwrap_or("Unknown")
-                        .to_string(),
-                )
+                Some(response["error"].as_str().unwrap_or("Unknown").to_string())
             } else {
                 None
             },
@@ -1418,26 +1436,28 @@ async fn regenerate_dashboard() {
     let db_path = output_dir.join("benchmark.db");
 
     if !db_path.exists() {
-        println!("No benchmark.db found at {:?}. Run the competitive benchmark first.", db_path);
+        println!(
+            "No benchmark.db found at {:?}. Run the competitive benchmark first.",
+            db_path
+        );
         return;
     }
 
     match benchmark::db::open_db(&db_path) {
-        Ok(conn) => {
-            match benchmark::db::load_dashboard_data(&conn) {
-                Ok(data) => {
-                    let dashboard_path = output_dir.join("dashboard.html");
-                    benchmark::dashboard::generate(&data, &dashboard_path);
-                    println!("Dashboard regenerated: {:?}", dashboard_path);
-                    println!("Runs: {}, URL results: {}, LLM verdicts: {}",
-                        data.runs.len(),
-                        data.latest_url_results.len(),
-                        data.latest_llm_verdicts.len()
-                    );
-                }
-                Err(e) => eprintln!("Failed to load dashboard data: {}", e),
+        Ok(conn) => match benchmark::db::load_dashboard_data(&conn) {
+            Ok(data) => {
+                let dashboard_path = output_dir.join("dashboard.html");
+                benchmark::dashboard::generate(&data, &dashboard_path);
+                println!("Dashboard regenerated: {:?}", dashboard_path);
+                println!(
+                    "Runs: {}, URL results: {}, LLM verdicts: {}",
+                    data.runs.len(),
+                    data.latest_url_results.len(),
+                    data.latest_llm_verdicts.len()
+                );
             }
-        }
+            Err(e) => eprintln!("Failed to load dashboard data: {}", e),
+        },
         Err(e) => eprintln!("Failed to open database: {}", e),
     }
 }
