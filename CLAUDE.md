@@ -49,7 +49,7 @@ cp .env.example .env
 1. **HTTP Engine** (fast path, majority of requests) -- lightweight HTTP fetch via reqwest. Used when HTML contains sufficient content density.
 2. **Browser Engine** (fallback) -- full Chromium automation via chromiumoxide/CDP. Used for SPAs, anti-bot pages, JavaScript-rendered content.
 
-Auto-detection based on content density analysis, hydration markers, meta-refresh detection, and anti-fetch headers.
+Auto-detection uses a content-quality-first strategy: if the HTTP response has substantial visible text (>1000 chars), it's returned immediately regardless of framework markers. Browser fallback only triggers for true SPA shells with minimal content. A shared `EngineRacer` (via `tokio::sync::OnceCell`) ensures browser pool reuse across requests.
 
 ### Module Structure
 
@@ -106,6 +106,21 @@ Test files in `backend/tests/`:
 - `crawler_bounds_tests.rs` -- crawler config and circuit breaker tests
 - `memory_bounds_integration.rs` -- memory monitoring tests
 - `test_markdown_cleaning.rs` -- markdown output quality tests
+- `competitive_benchmark.rs` -- Essence vs Firecrawl head-to-head (Rust, LLM judge)
+
+### Three-Way Benchmark (Python)
+
+```bash
+# Speed only (fast)
+python3 benchmarks/three_way_benchmark.py --subset news,docs
+
+# Full benchmark with LLM judge quality evaluation
+python3 benchmarks/three_way_benchmark.py --llm-judge
+
+# Results saved to benchmarks/results/three_way_results.json
+```
+
+Requires Essence (port 8080), Firecrawl (port 3002), and Crawl4AI (port 11235) running.
 
 ## Environment Variables
 
@@ -120,6 +135,8 @@ See `backend/.env.example` for the full list. Key variables:
 | `BROWSER_TIMEOUT_MS` | `30000` | Browser page timeout |
 | `MAX_PARALLEL_SCRAPES` | `5` | Parallel scrapes for /search |
 | `MAX_REQUEST_SIZE_MB` | `1` | Max request body size |
+| `ENGINE_WATERFALL_DELAY_MS` | `1500` | HTTP timeout before browser race |
+| `CONTENT_SUFFICIENT_CHARS` | `1000` | Visible text threshold for HTTP-only fast path |
 
 ## Error Handling
 

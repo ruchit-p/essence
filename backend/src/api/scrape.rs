@@ -11,7 +11,27 @@ use crate::{
     validation,
 };
 use axum::Json;
+use tokio::sync::OnceCell;
 use tracing::{error, info, warn};
+
+/// Shared EngineRacer instance — initialized once, reused across all requests.
+/// This ensures the BrowserPool is shared (browser reuse) and avoids the 2-5s
+/// Chrome launch overhead on every request that triggers browser fallback.
+static SHARED_RACER: OnceCell<EngineRacer> = OnceCell::const_new();
+
+/// Get or initialize the shared EngineRacer
+pub async fn get_shared_racer(delay_ms: u64) -> Result<&'static EngineRacer, ScrapeError> {
+    SHARED_RACER
+        .get_or_try_init(|| async {
+            info!("Initializing shared EngineRacer (delay: {}ms)", delay_ms);
+            EngineRacer::with_delay(delay_ms).await
+        })
+        .await
+        .map_err(|e| {
+            error!("Failed to initialize shared EngineRacer: {}", e);
+            e
+        })
+}
 
 /// Core scrape logic that can be called from both API handler and queue service
 pub async fn scrape_core_logic(request: &ScrapeRequest) -> Result<ScrapeResponse, ScrapeError> {
@@ -48,19 +68,14 @@ pub async fn scrape_core_logic(request: &ScrapeRequest) -> Result<ScrapeResponse
         "browser" => true,
         "http" => false,
         _ => {
-            // Auto mode - use waterfall racing if enabled
+            // Auto mode (default) - fast with content-quality-first fallback
             if settings.engine.waterfall_enabled {
                 info!(
                     "Using waterfall racing for URL: {} (delay: {}ms)",
                     request.url, settings.engine.waterfall_delay_ms
                 );
 
-                let racer = EngineRacer::with_delay(settings.engine.waterfall_delay_ms)
-                    .await
-                    .map_err(|e| {
-                        error!("Failed to create engine racer: {}", e);
-                        e
-                    })?;
+                let racer = get_shared_racer(settings.engine.waterfall_delay_ms).await?;
 
                 let (raw_result, metrics) = racer.race_scrape_with_metrics(request).await.map_err(|e| {
                     error!("Waterfall race failed for URL {}: {}", request.url, e);

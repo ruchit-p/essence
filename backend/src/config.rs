@@ -30,6 +30,9 @@ pub struct EngineSettings {
     /// Default: 1000ms. Keeps batch scraping fast while still falling back to browser.
     pub batch_waterfall_delay_ms: u64,
     pub auto_fallback_on_block: bool,
+    /// Visible text character threshold above which HTTP results are accepted
+    /// regardless of framework detection. Default: 1000 chars (~150 words).
+    pub content_sufficient_chars: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -70,9 +73,10 @@ impl Settings {
             },
             engine: EngineSettings {
                 waterfall_enabled: env_or("ENGINE_WATERFALL_ENABLED", true),
-                waterfall_delay_ms: env_or("ENGINE_WATERFALL_DELAY_MS", 5000),
+                waterfall_delay_ms: env_or("ENGINE_WATERFALL_DELAY_MS", 1500),
                 batch_waterfall_delay_ms: env_or("ENGINE_BATCH_WATERFALL_DELAY_MS", 1000),
                 auto_fallback_on_block: env_or("ESSENCE_ENGINE_AUTO_FALLBACK_ON_BLOCK", true),
+                content_sufficient_chars: env_or("CONTENT_SUFFICIENT_CHARS", 1000),
             },
             crawler: CrawlerSettings {
                 max_concurrent_requests: env_or("MAX_CONCURRENT_REQUESTS", 10),

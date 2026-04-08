@@ -82,6 +82,16 @@ async fn run_stdio() {
 async fn run_http(port: u16) {
     info!("Starting Essence web retrieval engine");
 
+    // Pre-warm the shared EngineRacer (initializes BrowserPool + finds Chrome)
+    // so the first request doesn't pay the cold-start cost.
+    let settings = essence::config::Settings::new().unwrap_or_else(|e| {
+        panic!("Failed to load settings: {}", e);
+    });
+    match essence::api::scrape::get_shared_racer(settings.engine.waterfall_delay_ms).await {
+        Ok(_) => info!("Shared EngineRacer pre-warmed successfully"),
+        Err(e) => warn!("Failed to pre-warm EngineRacer: {} (will retry on first request)", e),
+    }
+
     let max_request_size_mb: usize = std::env::var("MAX_REQUEST_SIZE_MB")
         .ok()
         .and_then(|s| s.parse().ok())

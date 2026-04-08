@@ -69,9 +69,17 @@ impl RenderingDetector {
             reasons.push("Hydration markers detected".to_string());
         }
 
-        let needs_js = !reasons.is_empty() || !detected_frameworks.is_empty();
+        // Require strong evidence before declaring JS rendering needed.
+        // A single weak signal (e.g., framework detected but content is present) is not enough.
+        // True SPAs have minimal content (<100 chars) — that's the strongest signal.
+        let has_minimal = reasons.iter().any(|r| r.contains("Minimal initial content"));
+        let strong_signal_count = detected_frameworks.len() + reasons.len();
+        let needs_js = has_minimal
+            || (strong_signal_count >= 3 && content_script_ratio < 0.3);
         let reason = if needs_js {
             reasons.join("; ")
+        } else if !reasons.is_empty() || !detected_frameworks.is_empty() {
+            format!("Signals detected but insufficient to trigger browser: {}", reasons.join("; "))
         } else {
             "Static content with sufficient initial HTML".to_string()
         };
@@ -163,13 +171,13 @@ impl RenderingDetector {
     /// Check for lazy loading indicators
     fn has_lazy_loading_indicators(document: &Html, html: &str) -> bool {
         // Check for lazy loading attributes
+        // Only patterns that indicate JS-dependent content loading.
+        // Excluded: loading="lazy", data-src, data-original — these are standard
+        // image optimization attributes present on virtually every modern site and
+        // do NOT indicate that JavaScript rendering is needed for text content.
         let lazy_patterns = vec![
             "data-lazy",
-            "data-src",
-            "loading=\"lazy\"",
-            "loading='lazy'",
             "lazy-load",
-            "data-original",
             "data-lazy-src",
         ];
 
@@ -288,12 +296,12 @@ impl RenderingDetector {
 
     /// Check for hydration markers
     fn has_hydration_markers(html: &str) -> bool {
+        // Only markers indicating client-side hydration is incomplete/needed.
+        // Excluded: __NEXT_DATA__, __NUXT__, data-server-rendered — these prove
+        // content IS server-rendered (SSR), meaning HTTP already has the content.
         let hydration_markers = vec![
             "data-reactid",
             "data-react-checksum",
-            "data-server-rendered",
-            "__NEXT_DATA__",
-            "__NUXT__",
             "data-hydrate",
         ];
 

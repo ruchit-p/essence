@@ -1,19 +1,19 @@
-# Essence vs Firecrawl: Benchmark Results
+# Essence Benchmark Results
 
-Head-to-head comparison of Essence and [Firecrawl](https://firecrawl.dev) across 35 real-world URLs spanning 7 content categories.
+Three-way comparison of Essence, [Firecrawl](https://firecrawl.dev), and [Crawl4AI](https://crawl4ai.com) across 35 real-world URLs spanning 7 content categories.
 
-**Bottom line:** Essence wins **91.2% of quality comparisons** (LLM judge) and is **1.5x faster** (median response time).
+**Bottom line:** Essence wins **97% of quality comparisons** vs Crawl4AI, **74%** vs Firecrawl, and is the **fastest engine overall** (498ms median).
 
 ## Summary
 
-| Metric | Essence | Firecrawl |
-|---|---|---|
-| **Quality Win Rate** (LLM Judge) | **91.2%** (31 wins) | 5.7% (2 wins) |
-| **Speed Win Rate** | **74%** (26 wins) | 26% (9 wins) |
-| Median Response Time | **700ms** | 1,043ms |
-| Success Rate | 100% | 100% |
+| Metric | Essence | Firecrawl | Crawl4AI |
+|---|---|---|---|
+| **Quality Win Rate** (LLM Judge, vs Essence) | -- | 74% lose | 97% lose |
+| **Speed Win Rate** (vs Essence) | -- | 23-4 lose | 26-2 lose |
+| Median Response Time | **498ms** | 908ms | 954ms |
+| Success Rate | 97% | 100% | 94% |
 
-*2 ties on quality. Evaluated March 2026.*
+*Evaluated April 2026. All engines self-hosted via Docker.*
 
 ## Quality: Per-Category Breakdown
 

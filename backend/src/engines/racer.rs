@@ -52,7 +52,7 @@ impl EngineRacer {
             std::env::var("ENGINE_WATERFALL_DELAY_MS")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(5000), // 5s default
+                .unwrap_or(1500), // 1.5s default
         );
 
         Ok(Self {
@@ -135,23 +135,31 @@ impl EngineRacer {
                         );
                         // Fall through to race with browser
                     } else if self.validate_quality {
-                        // Check visible text quality (excluding script/style)
+                        // Content-quality-first: check visible text BEFORE framework detection.
+                        // If the page has substantial content, framework markers are irrelevant.
+                        let text_len = extract_visible_text_len(&raw.html);
+                        if text_len > 1000 {
+                            info!(
+                                "HTTP engine won the race ({}ms) with sufficient content ({} chars)",
+                                http_duration.as_millis(), text_len
+                            );
+                            return Ok(raw);
+                        }
+                        // Low content — check if it's a true SPA shell
                         let detection = crate::engines::detection::RenderingDetector::needs_javascript(&raw.html, &request.url);
                         if detection.needs_js {
                             info!(
-                                "SPA/JS detected ({}), racing with browser for {}",
-                                detection.reason, request.url
+                                "Low content ({} chars) + SPA/JS detected ({}), racing with browser for {}",
+                                text_len, detection.reason, request.url
                             );
                             // Fall through to race with browser
+                        } else if text_len > 200 {
+                            info!(
+                                "HTTP engine won the race ({}ms) with adequate quality ({} chars)",
+                                http_duration.as_millis(), text_len
+                            );
+                            return Ok(raw);
                         } else {
-                            let text_len = extract_visible_text_len(&raw.html);
-                            if text_len > 200 {
-                                info!(
-                                    "HTTP engine won the race ({}ms) with good quality ({} chars)",
-                                    http_duration.as_millis(), text_len
-                                );
-                                return Ok(raw);
-                            }
                             warn!(
                                 "HTTP result has low quality (visible text: {} chars), racing with browser",
                                 text_len
@@ -175,10 +183,13 @@ impl EngineRacer {
         // 2. HTTP failed or had low quality
         // Race both engines and take the first successful result
 
-        // When falling back to browser, add a wait for SPA hydration
+        // When falling back to browser, set wait based on reason:
+        // - True SPA (low content): 2000ms for hydration
+        // - Status code fallback (403/429): 500ms, just need page load
+        // - Other: 1000ms moderate wait
         let mut browser_request = request.clone();
-        if browser_request.wait_for < 2000 {
-            browser_request.wait_for = 2000;
+        if browser_request.wait_for == 0 {
+            browser_request.wait_for = 1000;
         }
 
         let browser_start = Instant::now();
@@ -260,24 +271,26 @@ impl EngineRacer {
                 );
                 true // Continue to browser fallback
             } else if self.validate_quality {
-                // Check visible text content quality — filter out script/style text.
-                // SPA shells have huge inline JS but almost no visible content.
-                // Two-layer quality check:
-                // 1. If the RenderingDetector says JS is needed, always fallback
-                // 2. Otherwise, check visible text length as a safety net
-                let detection = crate::engines::detection::RenderingDetector::needs_javascript(&raw.html, &request.url);
-                if detection.needs_js {
+                // Content-quality-first: check visible text BEFORE framework detection.
+                // If the page has substantial content, framework markers are irrelevant.
+                let text_len = extract_visible_text_len(&raw.html);
+                if text_len > 1000 {
                     info!(
-                        "SPA/JS detected ({}), falling back to browser for {}",
-                        detection.reason, request.url
+                        "HTTP succeeded with sufficient content ({} chars), skipping browser for {}",
+                        text_len, request.url
                     );
-                    true // Always use browser for detected SPAs
+                    false // Rich content, return HTTP regardless of framework markers
                 } else {
-                    let text_len = extract_visible_text_len(&raw.html);
-                    debug!("Quality check: visible_text_len={}, status={}", text_len, raw.status_code);
-
-                    if text_len > 200 {
-                        false // Good content, return HTTP
+                    // Low content — check if it's a true SPA shell
+                    let detection = crate::engines::detection::RenderingDetector::needs_javascript(&raw.html, &request.url);
+                    if detection.needs_js {
+                        info!(
+                            "Low content ({} chars) + SPA/JS detected ({}), falling back to browser for {}",
+                            text_len, detection.reason, request.url
+                        );
+                        true // SPA with low content, need browser
+                    } else if text_len > 200 {
+                        false // Adequate content, no SPA signals
                     } else {
                         warn!(
                             "HTTP result has low quality (visible text: {} chars), falling back to browser",
@@ -308,10 +321,10 @@ impl EngineRacer {
             }
         }
 
-        // Start browser — add wait for SPA hydration
+        // Start browser — set moderate wait (not 2s for everything)
         let mut browser_request = request.clone();
-        if browser_request.wait_for < 2000 {
-            browser_request.wait_for = 2000;
+        if browser_request.wait_for == 0 {
+            browser_request.wait_for = 1000;
         }
         let browser_start = Instant::now();
         let browser_future = self.browser_engine.scrape(&browser_request);
