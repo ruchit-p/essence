@@ -89,18 +89,14 @@ pub async fn llmstxt_core_logic(
 
     // Step 2: Scrape all URLs concurrently with a semaphore
     let semaphore = Arc::new(Semaphore::new(request.max_concurrent_scrapes as usize));
-    let llm_config = if let Some(ref base_url) = request.llm_base_url {
-        Some(LlmConfig {
+    let llm_config = request.llm_base_url.as_ref().map(|base_url| LlmConfig {
             base_url: base_url.clone(),
             model: request
                 .llm_model
                 .clone()
                 .unwrap_or_else(|| "gpt-4o-mini".to_string()),
             api_key: request.llm_api_key.clone(),
-        })
-    } else {
-        None
-    };
+        });
     let llm_config = Arc::new(llm_config);
     let http_client = Arc::new(
         Client::builder()
@@ -192,7 +188,7 @@ async fn process_url(
                 .data
                 .as_ref()
                 .and_then(|d| d.markdown.as_ref())
-                .map_or(true, |m| m.trim().len() < 100),
+                .is_none_or(|m| m.trim().len() < 100),
             _ => false,
         };
 
@@ -255,7 +251,7 @@ async fn process_url(
         .or(data.metadata.og_title.as_deref())
         .or(data.title.as_deref())
         .unwrap_or_else(|| {
-            url.split('/').last().unwrap_or("Untitled")
+            url.split('/').next_back().unwrap_or("Untitled")
         })
         .to_string();
 
@@ -344,14 +340,7 @@ struct ChatMessage {
 fn resolve_llm_endpoint(base_url: &str) -> (String, LlmApiType) {
     let base = base_url.trim_end_matches('/');
     if base.contains("/v1/responses") {
-        (
-            if base.ends_with("/v1/responses") {
-                base.to_string()
-            } else {
-                base.to_string()
-            },
-            LlmApiType::Responses,
-        )
+        (base.to_string(), LlmApiType::Responses)
     } else if base.ends_with("/v1/chat/completions") {
         (base.to_string(), LlmApiType::ChatCompletions)
     } else {

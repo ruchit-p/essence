@@ -199,7 +199,7 @@ pub async fn crawl_website_stream(
         // Scrape with retry for transient errors
         let mut scrape_result = scrape_url(&current_url, &engine, &config, engine_mode).await;
         for retry in 0..2 {
-            if scrape_result.is_ok() || !scrape_result.as_ref().err().map_or(false, |e| e.is_transient()) {
+            if scrape_result.is_ok() || !scrape_result.as_ref().err().is_some_and(|e| e.is_transient()) {
                 break;
             }
             tracing::debug!("Retrying transient error for {} (attempt {})", current_url, retry + 2);
@@ -225,8 +225,7 @@ pub async fn crawl_website_stream(
                                 if !visited.contains(&normalized_link)
                                     && !url_depths.contains_key(&normalized_link)
                                     && is_same_domain(&normalized_link, &request.url)
-                                {
-                                    if queue.len() < config.max_queue_size {
+                                    && queue.len() < config.max_queue_size {
                                         let prioritized_link = PrioritizedUrl::new(
                                             normalized_link.clone(),
                                             current_depth + 1,
@@ -235,7 +234,6 @@ pub async fn crawl_website_stream(
                                         queue.push(prioritized_link);
                                         url_depths.insert(normalized_link, current_depth + 1);
                                     }
-                                }
                             }
                         }
                         continue;
@@ -382,7 +380,7 @@ pub async fn crawl_website_stream(
 
                 // Handle 429 Too Many Requests
                 if let ScrapeError::RequestFailed(ref reqwest_err) = e {
-                    if reqwest_err.status().map_or(false, |s| s == reqwest::StatusCode::TOO_MANY_REQUESTS) {
+                    if reqwest_err.status() == Some(reqwest::StatusCode::TOO_MANY_REQUESTS) {
                         rate_limiter.throttle_domain(&current_url);
                     }
                 }

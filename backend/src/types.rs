@@ -661,7 +661,7 @@ impl LlmsTxtResponse {
         Self {
             success: true,
             llmstxt: Some(llmstxt),
-            llms_fulltxt: llms_fulltxt,
+            llms_fulltxt,
             urls_processed: Some(urls_processed),
             urls_total: Some(urls_total),
             error: None,

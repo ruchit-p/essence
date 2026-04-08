@@ -499,7 +499,7 @@ impl ParallelCrawler {
 
                     // Handle 429 Too Many Requests
                     if let ScrapeError::RequestFailed(ref reqwest_err) = e {
-                        if reqwest_err.status().map_or(false, |s| s == reqwest::StatusCode::TOO_MANY_REQUESTS) {
+                        if reqwest_err.status() == Some(reqwest::StatusCode::TOO_MANY_REQUESTS) {
                             rate_limiter.throttle_domain(&current_url);
                         }
                     }
