@@ -98,16 +98,20 @@ fn bench_link_extraction(c: &mut Criterion) {
         html.push_str("</body></html>");
 
         let document = Html::parse_document(&html);
-        group.bench_with_input(BenchmarkId::from_parameter(link_count), link_count, |b, _| {
-            b.iter(|| {
-                // Extract links using scraper
-                let selector = scraper::Selector::parse("a[href]").unwrap();
-                let _links: Vec<_> = black_box(&document)
-                    .select(&selector)
-                    .filter_map(|el| el.value().attr("href"))
-                    .collect();
-            })
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(link_count),
+            link_count,
+            |b, _| {
+                b.iter(|| {
+                    // Extract links using scraper
+                    let selector = scraper::Selector::parse("a[href]").unwrap();
+                    let _links: Vec<_> = black_box(&document)
+                        .select(&selector)
+                        .filter_map(|el| el.value().attr("href"))
+                        .collect();
+                })
+            },
+        );
     }
 
     group.finish();

@@ -100,9 +100,11 @@ fn bench_markdown_with_lists(c: &mut Criterion) {
 
     for list_count in [5, 10, 20, 50].iter() {
         let html = generate_html(10, *list_count, 2);
-        group.bench_with_input(BenchmarkId::from_parameter(list_count), list_count, |b, _| {
-            b.iter(|| convert_to_markdown(black_box(&html)))
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(list_count),
+            list_count,
+            |b, _| b.iter(|| convert_to_markdown(black_box(&html))),
+        );
     }
 
     group.finish();
@@ -113,9 +115,11 @@ fn bench_markdown_with_code(c: &mut Criterion) {
 
     for code_count in [5, 10, 20, 50].iter() {
         let html = generate_html(10, 2, *code_count);
-        group.bench_with_input(BenchmarkId::from_parameter(code_count), code_count, |b, _| {
-            b.iter(|| convert_to_markdown(black_box(&html)))
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(code_count),
+            code_count,
+            |b, _| b.iter(|| convert_to_markdown(black_box(&html))),
+        );
     }
 
     group.finish();

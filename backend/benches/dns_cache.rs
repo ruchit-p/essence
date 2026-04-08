@@ -2,7 +2,7 @@
 //!
 //! This benchmark measures the latency improvement from DNS caching.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use essence::utils::dns_cache::DnsCache;
 use tokio::runtime::Runtime;
 
@@ -19,7 +19,7 @@ fn bench_dns_lookup(c: &mut Criterion) {
     ];
 
     let mut group = c.benchmark_group("dns_lookup");
-    
+
     for domain in &domains {
         // First lookup - cache miss
         group.bench_with_input(
@@ -49,17 +49,17 @@ fn bench_dns_lookup(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 fn bench_cache_hit_rate(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     c.bench_function("mixed_lookup_pattern", |b| {
         b.to_async(&rt).iter(|| async {
             let cache = DnsCache::new().unwrap();
-            
+
             // Simulate real-world pattern: some repeated, some new domains
             let _ = cache.lookup("google.com").await;
             let _ = cache.lookup("github.com").await;
@@ -67,7 +67,7 @@ fn bench_cache_hit_rate(c: &mut Criterion) {
             let _ = cache.lookup("rust-lang.org").await;
             let _ = cache.lookup("github.com").await; // hit
             let _ = cache.lookup("google.com").await; // hit
-            
+
             let stats = cache.stats().await;
             black_box(stats)
         });
