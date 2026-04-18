@@ -128,6 +128,10 @@ rand = "0.8"
 rmcp = { version = "0.15", features = ["server", "transport-streamable-http-server", "transport-io"] }
 schemars = "1.0"
 
+# OpenAPI documentation
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-axum = "0.2"
+
 [dev-dependencies]
 mockito = "1"
 wiremock = "0.6"

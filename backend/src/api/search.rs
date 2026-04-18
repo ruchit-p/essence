@@ -11,6 +11,16 @@ use std::sync::Arc;
 use tracing::{error, info, warn};
 
 /// Handler for POST /api/v1/search
+#[utoipa::path(
+    post,
+    path = "/api/v1/search",
+    request_body = SearchRequest,
+    responses(
+        (status = 200, description = "Search completed successfully", body = SearchResponse),
+        (status = 400, description = "Invalid request"),
+    ),
+    tag = "Search"
+)]
 pub async fn search_handler(
     Json(request): Json<SearchRequest>,
 ) -> Result<Json<SearchResponse>, ScrapeError> {

@@ -69,6 +69,12 @@ impl RenderingDetector {
             reasons.push("Hydration markers detected".to_string());
         }
 
+        // Check for generic SPA signals (no specific framework match needed)
+        let has_generic_spa = Self::has_generic_spa_signals(&document, html);
+        if has_generic_spa {
+            reasons.push("Generic SPA signals detected".to_string());
+        }
+
         // Require strong evidence before declaring JS rendering needed.
         // A single weak signal (e.g., framework detected but content is present) is not enough.
         // True SPAs have minimal content (<100 chars) — that's the strongest signal.
@@ -76,7 +82,9 @@ impl RenderingDetector {
             .iter()
             .any(|r| r.contains("Minimal initial content"));
         let strong_signal_count = detected_frameworks.len() + reasons.len();
-        let needs_js = has_minimal || (strong_signal_count >= 3 && content_script_ratio < 0.3);
+        let needs_js = has_minimal
+            || (strong_signal_count >= 3 && content_script_ratio < 0.3)
+            || has_generic_spa;
         let reason = if needs_js {
             reasons.join("; ")
         } else if !reasons.is_empty() || !detected_frameworks.is_empty() {
@@ -143,6 +151,26 @@ impl RenderingDetector {
                 name: "Ember",
                 html_markers: vec!["ember-application", "ember-view"],
                 script_patterns: vec!["ember.js"],
+            },
+            FrameworkSignature {
+                name: "Remix",
+                html_markers: vec!["__remix", "__remixContext", "__remix_data"],
+                script_patterns: vec!["@remix-run", "remix.run"],
+            },
+            FrameworkSignature {
+                name: "Solid",
+                html_markers: vec!["data-hk", "_$HY"],
+                script_patterns: vec!["solid-js", "solidjs"],
+            },
+            FrameworkSignature {
+                name: "Qwik",
+                html_markers: vec!["q:container", "q:version", "q:base"],
+                script_patterns: vec!["@builder.io/qwik", "qwikloader"],
+            },
+            FrameworkSignature {
+                name: "Astro",
+                html_markers: vec!["astro-island", "client:load", "client:visible"],
+                script_patterns: vec!["astro/", "@astrojs"],
             },
         ]
     }
@@ -292,6 +320,113 @@ impl RenderingDetector {
         }
 
         false
+    }
+
+    /// Detect generic SPA signals without matching a specific framework
+    fn has_generic_spa_signals(document: &Html, _html: &str) -> bool {
+        // (a) Empty root div with script tags present
+        let has_empty_root = {
+            let root_selectors = [
+                "div#root",
+                "div#app",
+                "div#__app",
+                "div[id=\"application\"]",
+            ];
+            let has_scripts = Selector::parse("script")
+                .map(|sel| document.select(&sel).next().is_some())
+                .unwrap_or(false);
+
+            let mut found_empty_root = false;
+            for sel_str in &root_selectors {
+                if let Ok(selector) = Selector::parse(sel_str) {
+                    if let Some(element) = document.select(&selector).next() {
+                        let text = element.text().collect::<String>();
+                        let visible_text = text.trim();
+                        if visible_text.len() < 20 && has_scripts {
+                            found_empty_root = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            found_empty_root
+        };
+
+        if has_empty_root {
+            return true;
+        }
+
+        let mut secondary_signals = 0;
+
+        // (b) Heavy module scripts: 3 or more <script type="module"> tags
+        let has_heavy_modules = Selector::parse("script[type=\"module\"]")
+            .map(|sel| document.select(&sel).count() >= 3)
+            .unwrap_or(false);
+        if has_heavy_modules {
+            secondary_signals += 1;
+        }
+
+        // (c) Bundle patterns in script src attributes
+        let has_bundle_patterns = {
+            let bundle_patterns = [
+                "_buildManifest",
+                "__webpack",
+                ".chunk.",
+                "chunk-",
+                "vendor.",
+            ];
+            // app. followed by hash-like pattern (hex chars)
+            let app_hash_re = regex::Regex::new(r"app\.[0-9a-f]{6,}").ok();
+
+            let mut found = false;
+            if let Ok(selector) = Selector::parse("script[src]") {
+                for element in document.select(&selector) {
+                    if let Some(src) = element.value().attr("src") {
+                        for pattern in &bundle_patterns {
+                            if src.contains(pattern) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if !found {
+                            if let Some(ref re) = app_hash_re {
+                                if re.is_match(src) {
+                                    found = true;
+                                }
+                            }
+                        }
+                        if found {
+                            break;
+                        }
+                    }
+                }
+            }
+            found
+        };
+        if has_bundle_patterns {
+            secondary_signals += 1;
+        }
+
+        // (d) Explicit JS dependency in noscript tags
+        let has_noscript_js_warning = {
+            let mut found = false;
+            if let Ok(selector) = Selector::parse("noscript") {
+                for element in document.select(&selector) {
+                    let noscript_text = element.text().collect::<String>().to_lowercase();
+                    if noscript_text.contains("javascript") || noscript_text.contains("enable") {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            found
+        };
+        if has_noscript_js_warning {
+            secondary_signals += 1;
+        }
+
+        // Return true if 2+ secondary signals
+        secondary_signals >= 2
     }
 
     /// Check for hydration markers
@@ -472,5 +607,119 @@ mod tests {
         let result = RenderingDetector::needs_javascript(html, "https://example.com");
         // With external scripts, the ratio should be low
         assert!(result.content_script_ratio < 0.8); // More lenient assertion
+    }
+
+    #[test]
+    fn test_detect_remix() {
+        let html = r#"
+            <!DOCTYPE html>
+            <html>
+            <body>
+                <div id="root"></div>
+                <script>window.__remixContext = {}</script>
+            </body>
+            </html>
+        "#;
+        let result = RenderingDetector::needs_javascript(html, "https://example.com");
+        assert!(result.needs_js);
+        assert!(result.detected_frameworks.contains(&"Remix".to_string()));
+    }
+
+    #[test]
+    fn test_detect_qwik() {
+        let html = r#"
+            <!DOCTYPE html>
+            <html q:container="paused" q:version="1.0">
+            <body>
+                <div></div>
+                <script src="/@builder.io/qwik/build/qwikloader.js"></script>
+            </body>
+            </html>
+        "#;
+        let result = RenderingDetector::needs_javascript(html, "https://example.com");
+        assert!(result.needs_js);
+        assert!(result.detected_frameworks.contains(&"Qwik".to_string()));
+    }
+
+    #[test]
+    fn test_detect_astro_client() {
+        let html = r#"
+            <!DOCTYPE html>
+            <html>
+            <body>
+                <astro-island uid="abc" component-export="Counter" client:load>
+                </astro-island>
+                <script src="/@astrojs/client.js"></script>
+            </body>
+            </html>
+        "#;
+        let result = RenderingDetector::needs_javascript(html, "https://example.com");
+        assert!(result.needs_js);
+        assert!(result.detected_frameworks.contains(&"Astro".to_string()));
+    }
+
+    #[test]
+    fn test_generic_spa_empty_root_div() {
+        // Custom SPA with no framework markers but empty root + scripts
+        let html = r#"
+            <!DOCTYPE html>
+            <html>
+            <body>
+                <div id="root"></div>
+                <script src="/assets/main.abc123.js"></script>
+            </body>
+            </html>
+        "#;
+        let result = RenderingDetector::needs_javascript(html, "https://example.com");
+        assert!(
+            result.needs_js,
+            "Empty root div with scripts should trigger SPA detection: {}",
+            result.reason
+        );
+    }
+
+    #[test]
+    fn test_generic_spa_module_scripts_and_bundles() {
+        // Custom SPA with module scripts and bundle patterns (no framework markers)
+        let html = r#"
+            <!DOCTYPE html>
+            <html>
+            <body>
+                <p>Loading...</p>
+                <script type="module" src="/chunk-abc123.js"></script>
+                <script type="module" src="/vendor.def456.js"></script>
+                <script type="module" src="/app.789abc.js"></script>
+                <noscript>You need to enable JavaScript to run this app.</noscript>
+            </body>
+            </html>
+        "#;
+        let result = RenderingDetector::needs_javascript(html, "https://example.com");
+        assert!(
+            result.needs_js,
+            "Module scripts + bundle patterns + noscript should trigger: {}",
+            result.reason
+        );
+    }
+
+    #[test]
+    fn test_static_page_with_scripts_not_triggered() {
+        // Static page that happens to have scripts (should NOT trigger generic SPA)
+        let html = r#"
+            <!DOCTYPE html>
+            <html>
+            <body>
+                <h1>Welcome to Our Site</h1>
+                <p>This is a content-rich page with lots of text.</p>
+                <p>Another paragraph with meaningful content that shows this is not a SPA.</p>
+                <script src="/analytics.js"></script>
+            </body>
+            </html>
+        "#;
+        let result = RenderingDetector::needs_javascript(html, "https://example.com");
+        assert!(
+            !result.needs_js,
+            "Static page with analytics script should not trigger: {}",
+            result.reason
+        );
     }
 }

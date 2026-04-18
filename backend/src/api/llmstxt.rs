@@ -22,6 +22,16 @@ struct ProcessedPage {
 }
 
 /// Handler for POST /api/v1/llmstxt
+#[utoipa::path(
+    post,
+    path = "/api/v1/llmstxt",
+    request_body = LlmsTxtRequest,
+    responses(
+        (status = 200, description = "llms.txt generated successfully", body = LlmsTxtResponse),
+        (status = 400, description = "Invalid request"),
+    ),
+    tag = "LLMs.txt"
+)]
 pub async fn llmstxt_handler(
     Json(request): Json<LlmsTxtRequest>,
 ) -> Result<Json<LlmsTxtResponse>, ScrapeError> {

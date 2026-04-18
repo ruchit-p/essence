@@ -1,5 +1,7 @@
 use crate::error::ScrapeError;
-use crate::types::{CrawlRequest, LlmsTxtRequest, MapRequest, ScrapeRequest, SearchRequest};
+use crate::types::{
+    CrawlRequest, ExtractRequest, LlmsTxtRequest, MapRequest, ScrapeRequest, SearchRequest,
+};
 use crate::utils::ssrf_protection;
 use scraper::Selector;
 use std::time::Duration;
@@ -196,6 +198,73 @@ pub fn validate_search_request(req: &SearchRequest) -> Result<(), ScrapeError> {
         return Err(ScrapeError::InvalidRequest(format!(
             "Search limit too large: {} > {}",
             req.limit, MAX_SEARCH_LIMIT
+        )));
+    }
+
+    Ok(())
+}
+
+const MAX_EXTRACT_URLS: usize = 10;
+
+/// Validate extract request
+pub async fn validate_extract_request(req: &ExtractRequest) -> Result<(), ScrapeError> {
+    if req.urls.is_empty() {
+        return Err(ScrapeError::InvalidRequest(
+            "At least one URL is required".to_string(),
+        ));
+    }
+
+    if req.urls.len() > MAX_EXTRACT_URLS {
+        return Err(ScrapeError::InvalidRequest(format!(
+            "Too many URLs: {} > {}",
+            req.urls.len(),
+            MAX_EXTRACT_URLS
+        )));
+    }
+
+    for url in &req.urls {
+        validate_url(url).await?;
+    }
+
+    // Validate mode
+    if !matches!(req.mode.as_str(), "auto" | "llm" | "css") {
+        return Err(ScrapeError::InvalidRequest(format!(
+            "Invalid extraction mode '{}'. Must be 'auto', 'llm', or 'css'",
+            req.mode
+        )));
+    }
+
+    // LLM mode requires credentials
+    if req.mode == "llm" && req.llm_base_url.is_none() {
+        return Err(ScrapeError::InvalidRequest(
+            "LLM mode requires 'llmBaseUrl' to be set".to_string(),
+        ));
+    }
+
+    // CSS mode requires selectors
+    if req.mode == "css" && req.selectors.is_none() {
+        return Err(ScrapeError::InvalidRequest(
+            "CSS mode requires 'selectors' field with CSS selector mappings".to_string(),
+        ));
+    }
+
+    // Validate CSS selectors if provided
+    if let Some(selectors) = &req.selectors {
+        for (field, selector) in selectors {
+            validate_css_selector(selector).map_err(|e| {
+                ScrapeError::InvalidRequest(format!(
+                    "Invalid CSS selector for field '{}': {}",
+                    field, e
+                ))
+            })?;
+        }
+    }
+
+    // Validate timeout
+    if req.timeout > MAX_TIMEOUT_MS {
+        return Err(ScrapeError::InvalidRequest(format!(
+            "Timeout too large: {}ms > {}ms",
+            req.timeout, MAX_TIMEOUT_MS
         )));
     }
 

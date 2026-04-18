@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use utoipa::ToSchema;
 
 /// Main scrape request matching Firecrawl v1 schema
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScrapeRequest {
     /// Required: URL to scrape
@@ -66,7 +67,7 @@ pub struct ScrapeRequest {
 }
 
 /// Browser actions to perform
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum BrowserAction {
     Click { selector: String },
@@ -120,7 +121,7 @@ impl Default for ScrapeRequest {
 }
 
 /// Scrape response matching Firecrawl v1 schema
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ScrapeResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -134,7 +135,7 @@ pub struct ScrapeResponse {
 }
 
 /// Document structure containing scraped data
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
     /// Page title
@@ -178,7 +179,7 @@ pub struct Document {
 }
 
 /// Metadata structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -299,7 +300,7 @@ impl ScrapeResponse {
 }
 
 /// Map request matching Firecrawl v1 schema
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MapRequest {
     /// Required: URL to map
@@ -323,7 +324,7 @@ pub struct MapRequest {
 }
 
 /// Map response matching Firecrawl v1 schema
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MapResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -363,7 +364,7 @@ impl MapResponse {
 }
 
 /// Crawl request matching Firecrawl v1 crawl schema
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CrawlRequest {
     /// Required: Starting URL
@@ -416,7 +417,7 @@ pub struct CrawlRequest {
 }
 
 /// Crawl response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CrawlResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -478,7 +479,7 @@ impl CrawlResponse {
 // ===== Search Types =====
 
 /// Search request
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchRequest {
     /// Search query
@@ -498,7 +499,7 @@ pub struct SearchRequest {
 }
 
 /// Scrape options for search results
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScrapeOptions {
     /// Formats to return (default: ["markdown"])
@@ -515,7 +516,7 @@ pub struct ScrapeOptions {
 }
 
 /// Search response
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct SearchResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -525,7 +526,7 @@ pub struct SearchResponse {
 }
 
 /// Individual search result
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct SearchResult {
     /// Title of the search result
     pub title: String,
@@ -567,7 +568,7 @@ impl SearchResponse {
 // ===== LLMs.txt Types =====
 
 /// Request for generating llms.txt and llms-full.txt
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmsTxtRequest {
     /// Required: Website URL to generate llms.txt for
@@ -625,7 +626,7 @@ fn default_llmstxt_concurrency() -> u32 {
 }
 
 /// Response containing generated llms.txt content
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmsTxtResponse {
     pub success: bool,
@@ -674,6 +675,100 @@ impl LlmsTxtResponse {
             llms_fulltxt: None,
             urls_processed: None,
             urls_total: None,
+            error: Some(error),
+        }
+    }
+}
+
+// ===== Extract Types =====
+
+/// Request for structured data extraction from web pages
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractRequest {
+    /// URLs to extract data from (1-10)
+    pub urls: Vec<String>,
+
+    /// JSON Schema defining the desired output structure
+    #[serde(default)]
+    pub schema: Option<serde_json::Value>,
+
+    /// Natural language prompt for LLM-based extraction
+    #[serde(default)]
+    pub prompt: Option<String>,
+
+    /// CSS selector → field name mappings for rule-based extraction.
+    /// e.g. {"title": "h1.product-name", "price": "span.price"}
+    #[serde(default)]
+    pub selectors: Option<HashMap<String, String>>,
+
+    /// Extraction mode: "auto" | "llm" | "css" (default: "auto").
+    /// "auto" tries CSS first, falls back to LLM if selectors are absent or result is incomplete.
+    /// "css" uses only CSS selectors (no LLM). "llm" uses only LLM extraction.
+    #[serde(default = "default_extract_mode")]
+    pub mode: String,
+
+    /// OpenAI-compatible LLM API base URL (required for "llm" mode)
+    #[serde(default)]
+    pub llm_base_url: Option<String>,
+
+    /// LLM model name (e.g. "gpt-4o-mini")
+    #[serde(default)]
+    pub llm_model: Option<String>,
+
+    /// API key for the LLM service
+    #[serde(default)]
+    pub llm_api_key: Option<String>,
+
+    /// Engine: "auto" | "http" | "browser" (default: "auto")
+    #[serde(default = "default_engine")]
+    pub engine: String,
+
+    /// Request timeout per URL in milliseconds (default: 30000)
+    #[serde(default = "default_timeout")]
+    pub timeout: u64,
+}
+
+fn default_extract_mode() -> String {
+    "auto".to_string()
+}
+
+/// Response containing structured extracted data
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ExtractResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Vec<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl ExtractResponse {
+    pub fn success(data: Vec<serde_json::Value>) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            warning: None,
+            error: None,
+        }
+    }
+
+    pub fn success_with_warning(data: Vec<serde_json::Value>, warning: String) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            warning: Some(warning),
+            error: None,
+        }
+    }
+
+    pub fn error(error: String) -> Self {
+        Self {
+            success: false,
+            data: None,
+            warning: None,
             error: Some(error),
         }
     }

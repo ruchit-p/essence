@@ -8,6 +8,16 @@ use axum::Json;
 use tracing::{error, info};
 
 /// Handler for POST /api/v1/map
+#[utoipa::path(
+    post,
+    path = "/api/v1/map",
+    request_body = MapRequest,
+    responses(
+        (status = 200, description = "URLs discovered successfully", body = MapResponse),
+        (status = 400, description = "Invalid request"),
+    ),
+    tag = "Map"
+)]
 pub async fn map_handler(
     Json(request): Json<MapRequest>,
 ) -> Result<Json<MapResponse>, ScrapeError> {

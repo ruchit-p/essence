@@ -17,6 +17,16 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, warn};
 
 /// Handler for POST /api/v1/crawl
+#[utoipa::path(
+    post,
+    path = "/api/v1/crawl",
+    request_body = CrawlRequest,
+    responses(
+        (status = 200, description = "Crawl completed successfully", body = CrawlResponse),
+        (status = 400, description = "Invalid request"),
+    ),
+    tag = "Crawl"
+)]
 pub async fn crawl_handler(
     Json(request): Json<CrawlRequest>,
 ) -> Result<Json<CrawlResponse>, ScrapeError> {

@@ -16,7 +16,10 @@ cargo install essence-engine
 
 - **Two-tier rendering** -- lightweight HTTP fetch for most pages, automatic Chromium fallback for SPAs and JS-heavy sites
 - **LLM-optimized output** -- clean Markdown with noise removal, heading hierarchy, code preservation, and structured metadata
-- **4 REST endpoints + MCP server** -- scrape, crawl, map, search -- usable by humans and AI agents alike
+- **Structured extraction** -- pull typed JSON from pages using CSS selectors or LLM-based extraction with schema validation
+- **6 REST endpoints + MCP server** -- scrape, crawl, map, search, extract, llms.txt -- usable by humans and AI agents alike
+- **OpenAPI spec** -- auto-generated at `/api/docs/openapi.json` for SDK generation and tooling
+- **Official SDKs** -- Python and TypeScript client libraries
 - **Self-hosted & open-source** -- no API keys, no rate limits, no vendor lock-in
 - **Respectful crawling** -- robots.txt compliance, per-domain rate limits, configurable politeness
 - **Fast** -- median response under 1 second for HTTP-rendered pages
@@ -78,6 +81,11 @@ curl -s -X POST http://localhost:8080/api/v1/crawl \
 curl -s -X POST http://localhost:8080/api/v1/search \
   -H "Content-Type: application/json" \
   -d '{"query": "rust web scraping", "limit": 5}' | jq .
+
+# Extract structured data
+curl -s -X POST http://localhost:8080/api/v1/extract \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://example.com"], "mode": "css", "selectors": {"title": "h1", "links": "a"}, "schema": {"properties": {"title": {"type": "string"}, "links": {"type": "array"}}}}' | jq .
 ```
 
 ---
@@ -213,9 +221,44 @@ Web search via DuckDuckGo with optional scraping of result pages.
 }
 ```
 
+### POST /api/v1/extract
+
+Structured data extraction from web pages using CSS selectors, LLM-based extraction, or both.
+
+**Request:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `urls` | string[] | *required* | URLs to extract from (1-10) |
+| `schema` | object | none | JSON Schema for output structure |
+| `selectors` | object | none | CSS selector → field name mappings |
+| `prompt` | string | none | Natural language extraction instruction |
+| `mode` | string | `"auto"` | `"auto"`, `"css"`, or `"llm"` |
+| `llmBaseUrl` | string | none | OpenAI-compatible API URL (required for `"llm"` mode) |
+| `llmModel` | string | `"gpt-4o-mini"` | LLM model name |
+| `llmApiKey` | string | none | LLM API key |
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "title": "Example Domain",
+      "links": ["https://www.iana.org/domains/example"]
+    }
+  ]
+}
+```
+
 ### POST /api/v1/crawl/stream
 
 Streaming variant of the crawl endpoint. Returns results via Server-Sent Events (SSE) as pages are crawled, rather than waiting for the full crawl to complete. Accepts the same parameters as `/api/v1/crawl`.
+
+### GET /api/docs/openapi.json
+
+Auto-generated OpenAPI 3.1 specification for all endpoints. Use with Swagger UI, Postman, or SDK generators.
 
 ### GET /health
 
@@ -225,7 +268,7 @@ Health check endpoint. Returns `200 OK` when the server is running. Used by Dock
 
 ## MCP Server (AI Agent Integration)
 
-Essence includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server, allowing AI agents (Claude, Cursor, Windsurf, etc.) to use scrape, crawl, map, and search as tools directly.
+Essence includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server, allowing AI agents (Claude, Cursor, Windsurf, etc.) to use scrape, crawl, map, search, extract, and llmstxt as tools directly.
 
 The MCP endpoint is available at `http://localhost:8080/mcp` using the Streamable HTTP transport. Start the Essence server first, then connect your MCP client.
 
@@ -237,6 +280,8 @@ The MCP endpoint is available at `http://localhost:8080/mcp` using the Streamabl
 | `crawl` | Crawl a website up to a given depth and page limit. Params: `url` (required), `max_depth`, `limit`, `include_paths`, `exclude_paths` |
 | `map` | Discover URLs on a site via sitemaps and link extraction. Params: `url` (required), `search`, `limit`, `include_subdomains` |
 | `search` | Search the web and optionally scrape results. Params: `query` (required), `limit`, `scrape_results` |
+| `extract` | Extract structured data from pages. Params: `urls` (required), `schema`, `selectors`, `prompt`, `mode` |
+| `llmstxt` | Generate llms.txt from a website. Params: `url` (required), `max_urls`, `llm_base_url`, `show_full_text` |
 
 > **Note:** The MCP server uses `timeout_ms` while the REST API uses `timeout`. Both accept milliseconds.
 
@@ -255,7 +300,7 @@ Add to your project's `.mcp.json` (or global `~/.claude/.mcp.json`):
 }
 ```
 
-Then use Essence tools directly in Claude Code conversations -- Claude will call `scrape`, `crawl`, `map`, and `search` as needed.
+Then use Essence tools directly in Claude Code conversations -- Claude will call `scrape`, `crawl`, `map`, `search`, `extract`, and `llmstxt` as needed.
 
 ### Setup with Claude Desktop
 

@@ -12,10 +12,10 @@ use serde::Deserialize;
 use tracing::{error, info};
 
 use crate::{
-    api::{llmstxt::llmstxt_core_logic, scrape::scrape_core_logic},
+    api::{extract::extract_core_logic, llmstxt::llmstxt_core_logic, scrape::scrape_core_logic},
     crawler::{crawl_website, mapper},
     search::SearchProvider,
-    types::{CrawlRequest, LlmsTxtRequest, MapRequest, ScrapeRequest},
+    types::{CrawlRequest, ExtractRequest, LlmsTxtRequest, MapRequest, ScrapeRequest},
 };
 
 // ---------------------------------------------------------------------------
@@ -146,6 +146,46 @@ pub struct LlmsTxtParams {
 
     /// Rendering engine: "auto", "http", or "browser". Defaults to "auto".
     /// "auto" tries HTTP first, falls back to browser for JS-heavy pages.
+    #[serde(default)]
+    pub engine: Option<String>,
+}
+
+/// Parameters for the `extract` tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct ExtractParams {
+    /// URLs to extract structured data from (1-10).
+    pub urls: Vec<String>,
+
+    /// JSON Schema defining the desired output structure.
+    #[serde(default)]
+    pub schema: Option<serde_json::Value>,
+
+    /// Natural language prompt describing what to extract.
+    #[serde(default)]
+    pub prompt: Option<String>,
+
+    /// CSS selector → field name mappings for rule-based extraction.
+    /// e.g. {"title": "h1.product-name", "price": "span.price"}
+    #[serde(default)]
+    pub selectors: Option<std::collections::HashMap<String, String>>,
+
+    /// Extraction mode: "auto", "llm", or "css". Defaults to "auto".
+    #[serde(default)]
+    pub mode: Option<String>,
+
+    /// OpenAI-compatible LLM API base URL (required for "llm" mode).
+    #[serde(default)]
+    pub llm_base_url: Option<String>,
+
+    /// LLM model name (e.g. "gpt-4o-mini").
+    #[serde(default)]
+    pub llm_model: Option<String>,
+
+    /// API key for the LLM service.
+    #[serde(default)]
+    pub llm_api_key: Option<String>,
+
+    /// Rendering engine: "auto", "http", or "browser". Defaults to "auto".
     #[serde(default)]
     pub engine: Option<String>,
 }
@@ -362,6 +402,51 @@ impl EssenceMcpServer {
         Ok(CallToolResult::success(vec![Content::text(json)]))
     }
 
+    /// Extract structured data from web pages using CSS selectors or LLM-based extraction.
+    ///
+    /// Supports three modes: "css" (rule-based), "llm" (AI-powered), or "auto" (CSS first, LLM fallback).
+    #[tool(
+        description = "Extract structured data from web pages. Supports CSS selector mapping (rule-based), LLM extraction (AI-powered with BYO API key), or auto mode (CSS first, LLM fallback). Provide a JSON schema for the desired output structure."
+    )]
+    async fn extract(
+        &self,
+        Parameters(params): Parameters<ExtractParams>,
+    ) -> Result<CallToolResult, McpError> {
+        info!("MCP tool call: extract urls={:?}", params.urls);
+
+        let request = ExtractRequest {
+            urls: params.urls.clone(),
+            schema: params.schema,
+            prompt: params.prompt,
+            selectors: params.selectors,
+            mode: params.mode.unwrap_or_else(|| "auto".to_string()),
+            llm_base_url: params.llm_base_url,
+            llm_model: params.llm_model,
+            llm_api_key: params.llm_api_key,
+            engine: params.engine.unwrap_or_else(|| "auto".to_string()),
+            timeout: 30000,
+        };
+
+        match extract_core_logic(&request).await {
+            Ok(response) => {
+                let json = serde_json::to_string_pretty(&response).map_err(|e| {
+                    McpError::internal_error(
+                        format!("Failed to serialize extract response: {}", e),
+                        None,
+                    )
+                })?;
+                Ok(CallToolResult::success(vec![Content::text(json)]))
+            }
+            Err(e) => {
+                error!("MCP extract error: {}", e);
+                Ok(CallToolResult::error(vec![Content::text(format!(
+                    "Extract failed: {}",
+                    e
+                ))]))
+            }
+        }
+    }
+
     /// Generate llms.txt and llms-full.txt files from a documentation website.
     ///
     /// Discovers URLs, scrapes each page, and builds structured text files
@@ -436,9 +521,10 @@ impl ServerHandler for EssenceMcpServer {
             instructions: Some(
                 "Essence is a web retrieval engine. Use the 'scrape' tool to fetch a single page, \
                  'map' to discover URLs on a site, 'crawl' to traverse multiple pages, 'search' \
-                 to find pages via DuckDuckGo web search, or 'llmstxt' to generate llms.txt and \
-                 llms-full.txt files from a documentation website. All tools return structured JSON \
-                 with Markdown content suitable for LLM consumption."
+                 to find pages via DuckDuckGo web search, 'extract' to pull structured data from \
+                 pages using CSS selectors or LLM-based extraction, or 'llmstxt' to generate \
+                 llms.txt and llms-full.txt files from a documentation website. All tools return \
+                 structured JSON with Markdown content suitable for LLM consumption."
                     .to_string(),
             ),
             ..Default::default()

@@ -1,5 +1,7 @@
 pub mod advanced_extraction;
+pub mod extract;
 pub mod image_processing;
+pub mod llm_extract;
 pub mod markdown;
 pub mod metadata;
 

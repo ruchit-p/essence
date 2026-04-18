@@ -86,7 +86,12 @@ async fn run_http(port: u16) {
     let settings = essence::config::Settings::new().unwrap_or_else(|e| {
         panic!("Failed to load settings: {}", e);
     });
-    match essence::api::scrape::get_shared_racer(settings.engine.waterfall_delay_ms).await {
+    match essence::api::scrape::get_shared_racer(
+        settings.engine.waterfall_delay_ms,
+        settings.engine.content_sufficient_chars,
+    )
+    .await
+    {
         Ok(_) => info!("Shared EngineRacer pre-warmed successfully"),
         Err(e) => warn!(
             "Failed to pre-warm EngineRacer: {} (will retry on first request)",

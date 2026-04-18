@@ -20,11 +20,17 @@ use tracing::{error, info, warn};
 static SHARED_RACER: OnceCell<EngineRacer> = OnceCell::const_new();
 
 /// Get or initialize the shared EngineRacer
-pub async fn get_shared_racer(delay_ms: u64) -> Result<&'static EngineRacer, ScrapeError> {
+pub async fn get_shared_racer(
+    delay_ms: u64,
+    content_sufficient_chars: usize,
+) -> Result<&'static EngineRacer, ScrapeError> {
     SHARED_RACER
         .get_or_try_init(|| async {
-            info!("Initializing shared EngineRacer (delay: {}ms)", delay_ms);
-            EngineRacer::with_delay(delay_ms).await
+            info!(
+                "Initializing shared EngineRacer (delay: {}ms, content_threshold: {} chars)",
+                delay_ms, content_sufficient_chars
+            );
+            EngineRacer::with_config(delay_ms, true, content_sufficient_chars).await
         })
         .await
         .map_err(|e| {
@@ -75,7 +81,11 @@ pub async fn scrape_core_logic(request: &ScrapeRequest) -> Result<ScrapeResponse
                     request.url, settings.engine.waterfall_delay_ms
                 );
 
-                let racer = get_shared_racer(settings.engine.waterfall_delay_ms).await?;
+                let racer = get_shared_racer(
+                    settings.engine.waterfall_delay_ms,
+                    settings.engine.content_sufficient_chars,
+                )
+                .await?;
 
                 let (raw_result, metrics) =
                     racer.race_scrape_with_metrics(request).await.map_err(|e| {
@@ -227,6 +237,17 @@ pub async fn scrape_core_logic(request: &ScrapeRequest) -> Result<ScrapeResponse
 }
 
 /// Handler for POST /api/v1/scrape
+#[utoipa::path(
+    post,
+    path = "/api/v1/scrape",
+    request_body = ScrapeRequest,
+    responses(
+        (status = 200, description = "Page scraped successfully", body = ScrapeResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 408, description = "Request timeout"),
+    ),
+    tag = "Scrape"
+)]
 pub async fn scrape_handler(
     Json(request): Json<ScrapeRequest>,
 ) -> Result<Json<ScrapeResponse>, ScrapeError> {

@@ -43,6 +43,9 @@ pub struct EngineRacer {
     browser_engine: BrowserEngine,
     waterfall_delay: Duration,
     validate_quality: bool,
+    /// Visible text threshold above which HTTP results are accepted.
+    /// Maps to CONTENT_SUFFICIENT_CHARS env var / config.rs.
+    content_sufficient_chars: usize,
 }
 
 impl EngineRacer {
@@ -54,32 +57,42 @@ impl EngineRacer {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(1500), // 1.5s default
         );
+        let content_sufficient_chars: usize = std::env::var("CONTENT_SUFFICIENT_CHARS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1000);
 
         Ok(Self {
             http_engine: HttpEngine::new()?,
             browser_engine: BrowserEngine::new().await?,
             waterfall_delay,
             validate_quality: true,
+            content_sufficient_chars,
         })
     }
 
     /// Create a new engine racer with custom delay
     pub async fn with_delay(delay_ms: u64) -> Result<Self> {
-        Ok(Self {
-            http_engine: HttpEngine::new()?,
-            browser_engine: BrowserEngine::new().await?,
-            waterfall_delay: Duration::from_millis(delay_ms),
-            validate_quality: true,
-        })
+        Self::with_config(delay_ms, true, 1000).await
     }
 
     /// Create racer with custom options
     pub async fn with_options(delay_ms: u64, validate_quality: bool) -> Result<Self> {
+        Self::with_config(delay_ms, validate_quality, 1000).await
+    }
+
+    /// Create racer with full config
+    pub async fn with_config(
+        delay_ms: u64,
+        validate_quality: bool,
+        content_sufficient_chars: usize,
+    ) -> Result<Self> {
         Ok(Self {
             http_engine: HttpEngine::new()?,
             browser_engine: BrowserEngine::new().await?,
             waterfall_delay: Duration::from_millis(delay_ms),
             validate_quality,
+            content_sufficient_chars,
         })
     }
 
@@ -135,17 +148,26 @@ impl EngineRacer {
                         );
                         // Fall through to race with browser
                     } else if self.validate_quality {
-                        // Content-quality-first: check visible text BEFORE framework detection.
-                        // If the page has substantial content, framework markers are irrelevant.
-                        let text_len = extract_visible_text_len(&raw.html);
-                        if text_len > 1000 {
+                        // Content-quality-first: distinguish main content from nav chrome.
+                        let quality = extract_content_quality(&raw.html);
+                        let threshold = self.content_sufficient_chars;
+                        let low_threshold = threshold / 5;
+
+                        if quality.main_content_chars > threshold {
                             info!(
-                                "HTTP engine won the race ({}ms) with sufficient content ({} chars)",
-                                http_duration.as_millis(), text_len
+                                "HTTP engine won the race ({}ms) with sufficient main content ({} chars, nav_ratio: {:.2})",
+                                http_duration.as_millis(), quality.main_content_chars, quality.nav_ratio
                             );
                             return Ok(raw);
                         }
-                        // Low content — check if it's a true SPA shell
+                        if quality.total_visible_chars > threshold && quality.nav_ratio < 0.7 {
+                            info!(
+                                "HTTP engine won the race ({}ms) with sufficient total content ({} chars, nav_ratio: {:.2})",
+                                http_duration.as_millis(), quality.total_visible_chars, quality.nav_ratio
+                            );
+                            return Ok(raw);
+                        }
+                        // Low main content — check if it's a true SPA shell
                         let detection =
                             crate::engines::detection::RenderingDetector::needs_javascript(
                                 &raw.html,
@@ -153,21 +175,21 @@ impl EngineRacer {
                             );
                         if detection.needs_js {
                             info!(
-                                "Low content ({} chars) + SPA/JS detected ({}), racing with browser for {}",
-                                text_len, detection.reason, request.url
+                                "Low main content ({} chars, nav_ratio: {:.2}) + SPA/JS detected ({}), racing with browser for {}",
+                                quality.main_content_chars, quality.nav_ratio, detection.reason, request.url
                             );
                             // Fall through to race with browser
-                        } else if text_len > 200 {
+                        } else if quality.main_content_chars > low_threshold {
                             info!(
-                                "HTTP engine won the race ({}ms) with adequate quality ({} chars)",
+                                "HTTP engine won the race ({}ms) with adequate quality ({} main chars)",
                                 http_duration.as_millis(),
-                                text_len
+                                quality.main_content_chars
                             );
                             return Ok(raw);
                         } else {
                             warn!(
-                                "HTTP result has low quality (visible text: {} chars), racing with browser",
-                                text_len
+                                "HTTP result has low quality (main content: {} chars, total: {} chars), racing with browser",
+                                quality.main_content_chars, quality.total_visible_chars
                             );
                             // Fall through to race with browser
                         }
@@ -283,35 +305,43 @@ impl EngineRacer {
                 );
                 true // Continue to browser fallback
             } else if self.validate_quality {
-                // Content-quality-first: check visible text BEFORE framework detection.
-                // If the page has substantial content, framework markers are irrelevant.
-                let text_len = extract_visible_text_len(&raw.html);
-                if text_len > 1000 {
+                // Content-quality-first: distinguish main content from nav chrome.
+                let quality = extract_content_quality(&raw.html);
+                let threshold = self.content_sufficient_chars;
+                let low_threshold = threshold / 5;
+
+                if quality.main_content_chars > threshold {
                     info!(
-                        "HTTP succeeded with sufficient content ({} chars), skipping browser for {}",
-                        text_len, request.url
+                        "HTTP succeeded with sufficient main content ({} chars, nav_ratio: {:.2}), skipping browser for {}",
+                        quality.main_content_chars, quality.nav_ratio, request.url
                     );
-                    false // Rich content, return HTTP regardless of framework markers
+                    false
+                } else if quality.total_visible_chars > threshold && quality.nav_ratio < 0.7 {
+                    info!(
+                        "HTTP succeeded with sufficient total content ({} chars, nav_ratio: {:.2}), skipping browser for {}",
+                        quality.total_visible_chars, quality.nav_ratio, request.url
+                    );
+                    false
                 } else {
-                    // Low content — check if it's a true SPA shell
+                    // Low main content — check if it's a true SPA shell
                     let detection = crate::engines::detection::RenderingDetector::needs_javascript(
                         &raw.html,
                         &request.url,
                     );
                     if detection.needs_js {
                         info!(
-                            "Low content ({} chars) + SPA/JS detected ({}), falling back to browser for {}",
-                            text_len, detection.reason, request.url
+                            "Low main content ({} chars, nav_ratio: {:.2}) + SPA/JS detected ({}), falling back to browser for {}",
+                            quality.main_content_chars, quality.nav_ratio, detection.reason, request.url
                         );
-                        true // SPA with low content, need browser
-                    } else if text_len > 200 {
-                        false // Adequate content, no SPA signals
+                        true
+                    } else if quality.main_content_chars > low_threshold {
+                        false
                     } else {
                         warn!(
-                            "HTTP result has low quality (visible text: {} chars), falling back to browser",
-                            text_len
+                            "HTTP result has low quality (main content: {} chars, total: {} chars), falling back to browser",
+                            quality.main_content_chars, quality.total_visible_chars
                         );
-                        true // Continue to browser fallback
+                        true
                     }
                 }
             } else {
@@ -442,9 +472,20 @@ fn should_fallback_to_browser(raw: &RawScrapeResult) -> bool {
     }
 }
 
-/// Extract visible text length from HTML, excluding script/style/noscript content.
-/// This prevents SPA shells with massive inline JS from passing the quality check.
-fn extract_visible_text_len(html: &str) -> usize {
+/// Content quality analysis distinguishing navigation chrome from main content.
+struct ContentQuality {
+    /// Total visible text chars (excluding script/style/noscript)
+    total_visible_chars: usize,
+    /// Text chars NOT inside nav/header/footer/aside elements
+    main_content_chars: usize,
+    /// Fraction of visible text that is navigation/chrome (0.0 - 1.0)
+    nav_ratio: f64,
+}
+
+/// Analyze content quality from HTML, distinguishing nav chrome from main content.
+/// This prevents SPA shells with massive navigation but JS-rendered body from
+/// passing the quality check.
+fn extract_content_quality(html: &str) -> ContentQuality {
     use scraper::{Html, Selector};
 
     let document = Html::parse_document(html);
@@ -457,12 +498,26 @@ fn extract_visible_text_len(html: &str) -> usize {
         .unwrap_or_else(|| document.root_element());
 
     let skip_selector = Selector::parse("script, style, noscript").ok();
+    let nav_selector = Selector::parse(
+        "nav, header, footer, aside, [role='navigation'], [role='banner'], [role='contentinfo']",
+    )
+    .ok();
+
+    // Collect IDs of elements to skip (script/style/noscript)
     let skip_ids: std::collections::HashSet<_> = skip_selector
         .as_ref()
         .map(|s| document.select(s).map(|el| el.id()).collect())
         .unwrap_or_default();
 
-    let mut text = String::new();
+    // Collect IDs of nav/chrome elements
+    let nav_ids: std::collections::HashSet<_> = nav_selector
+        .as_ref()
+        .map(|s| document.select(s).map(|el| el.id()).collect())
+        .unwrap_or_default();
+
+    let mut total_text = String::new();
+    let mut nav_text = String::new();
+
     for node in root.descendants() {
         if let Some(el) = node.value().as_element() {
             if skip_ids.contains(&node.id()) || matches!(el.name(), "script" | "style" | "noscript")
@@ -471,9 +526,10 @@ fn extract_visible_text_len(html: &str) -> usize {
             }
         }
         if let Some(t) = node.value().as_text() {
-            // Skip text nodes that are children of script/style
+            // Check if this text node is inside a skip element
             let mut parent = node.parent();
             let mut in_skip = false;
+            let mut in_nav = false;
             while let Some(p) = parent {
                 if let Some(el) = p.value().as_element() {
                     if matches!(el.name(), "script" | "style" | "noscript") {
@@ -481,15 +537,34 @@ fn extract_visible_text_len(html: &str) -> usize {
                         break;
                     }
                 }
+                if nav_ids.contains(&p.id()) {
+                    in_nav = true;
+                }
                 parent = p.parent();
             }
             if !in_skip {
-                text.push_str(t);
+                total_text.push_str(t);
+                if in_nav {
+                    nav_text.push_str(t);
+                }
             }
         }
     }
 
-    text.trim().len()
+    let total_visible_chars = total_text.trim().len();
+    let nav_chars = nav_text.trim().len();
+    let main_content_chars = total_visible_chars.saturating_sub(nav_chars);
+    let nav_ratio = if total_visible_chars > 0 {
+        nav_chars as f64 / total_visible_chars as f64
+    } else {
+        0.0
+    };
+
+    ContentQuality {
+        total_visible_chars,
+        main_content_chars,
+        nav_ratio,
+    }
 }
 
 #[cfg(test)]
@@ -599,6 +674,80 @@ mod tests {
             racer.waterfall_delay.as_millis(),
             3000,
             "Should use custom delay"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_racer_with_config() {
+        let racer = EngineRacer::with_config(2000, true, 500).await;
+        assert!(racer.is_ok(), "Racer creation with config should succeed");
+
+        let racer = racer.unwrap();
+        assert_eq!(racer.waterfall_delay.as_millis(), 2000);
+        assert_eq!(racer.content_sufficient_chars, 500);
+    }
+
+    #[test]
+    fn test_content_quality_with_nav_heavy_page() {
+        let html = r#"<html><body>
+            <nav>Home About Contact Blog Products Services Team Careers Press FAQ Support</nav>
+            <header>Welcome to Our Company - Innovation at Scale</header>
+            <main><p>Short body.</p></main>
+            <footer>Copyright 2024 All Rights Reserved Terms Privacy</footer>
+        </body></html>"#;
+
+        let quality = extract_content_quality(html);
+        assert!(
+            quality.nav_ratio > 0.5,
+            "Nav-heavy page should have high nav_ratio: {}",
+            quality.nav_ratio
+        );
+        assert!(
+            quality.main_content_chars < quality.total_visible_chars,
+            "Main content should be less than total"
+        );
+    }
+
+    #[test]
+    fn test_content_quality_with_content_rich_page() {
+        let html = r#"<html><body>
+            <nav>Home About</nav>
+            <main>
+                <h1>Understanding Rust Ownership</h1>
+                <p>Ownership is Rust's most unique feature and has deep implications for the rest of the language.
+                It enables Rust to make memory safety guarantees without needing a garbage collector.
+                In this chapter, we'll talk about ownership as well as several related features:
+                borrowing, slices, and how Rust lays data out in memory. This is a substantial article
+                with plenty of content that should demonstrate high content quality scores.</p>
+            </main>
+        </body></html>"#;
+
+        let quality = extract_content_quality(html);
+        assert!(
+            quality.nav_ratio < 0.3,
+            "Content-rich page should have low nav_ratio: {}",
+            quality.nav_ratio
+        );
+        assert!(
+            quality.main_content_chars > 200,
+            "Should have substantial main content: {}",
+            quality.main_content_chars
+        );
+    }
+
+    #[test]
+    fn test_content_quality_excludes_scripts() {
+        let html = r#"<html><body>
+            <script>var x = "lots of javascript code that should not count"; var y = "more code";</script>
+            <style>.lots { of: css; rules: here; }</style>
+            <p>Small visible text.</p>
+        </body></html>"#;
+
+        let quality = extract_content_quality(html);
+        assert!(
+            quality.total_visible_chars < 100,
+            "Should exclude script/style text: {}",
+            quality.total_visible_chars
         );
     }
 }
